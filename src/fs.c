@@ -65,7 +65,7 @@ int iget(uint inum, struct inode *ip, FILE *f){
 
     struct dirent *d;
     
-    unsigned char buffer[BSIZE];
+    char buffer[BSIZE];
 
     memset(buffer, 0, sizeof buffer);
 
@@ -77,23 +77,38 @@ int iget(uint inum, struct inode *ip, FILE *f){
     sector = IBLOCK(inum);
 
     printf("Sector %d inum %d\n", sector, inum);
-    result = rsec(sector + 1, buffer, f);
+    result = rsec(sector, buffer, f);
 
-    printf("Result = %d\n", result);
-
-    diptr = (struct dinode *)buffer;
+    diptr = (struct dinode *)buffer + (inum % IPB);
     
 
 
-    printf("type %d\naddrs: %d\n", diptr->type, diptr->addrs[0]);
+    printf("size %d\ntype %d\naddrs: %d\n", diptr->size, diptr->type, diptr->addrs[0]);
     memset(buffer, 0, sizeof buffer);
 
 
-    result = rsec(diptr->addrs[0], buffer, f);
+    result = rsec(29 , buffer, f);
+	printf("%d bytes read\n", result);
+    
 
-    d = (struct dirent *) buffer;
+	d = ((struct dirent *) buffer);
 
-    printf("%s\n", d->name);
+	result = 0;
+
+
+	while(1) {
+		
+		if(d->inum == 0)
+			break;
+		
+		printf("name: %s\tinum: %d\n", d->name, d->inum);
+		
+		d = (struct dirent *)(buffer + result);
+
+		result += sizeof(struct dirent);
+
+	}
+
 
     while(1) {
         if(getc(stdin))

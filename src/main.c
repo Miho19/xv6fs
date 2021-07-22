@@ -133,7 +133,7 @@ int main(int argc, char **argv) {
     fuse_daemonize(opts.foreground);
 
 
-    f = fopen("/home/josh/Desktop/fuse-test/fs.img", "rb+");        // Open the file for reading/writing -> returns null if cant find it
+    f = fopen("/home/pi/fuse_test/fs.img", "rb+");        // Open the file for reading/writing -> returns null if cant find it
 
     if(!f) {
         printf("Could not open fs.img\n");
