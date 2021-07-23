@@ -1,5 +1,5 @@
 CC = gcc
-CLFAGS = -Wall -W $(shell pkg-config fuse3 --cflags --libs) -Iinclude/ -D_FILE_OFFSET_BITS=64
+CLFAGS = -Wall -W $(shell pkg-config fuse3 --cflags --libs) -Iinclude/ # -D_FILE_OFFSET_BITS=64
 LDFLAGS = $(shell pkg-config fuse3 --cflags --libs)
 
 

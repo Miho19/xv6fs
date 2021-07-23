@@ -10,6 +10,10 @@
 #define NINDIRECT (BSIZE / sizeof(uint))
 #define MAXFILE (NDIRECT + NINDIRECT)
 
+#define T_DIR 1
+#define T_FILE 2
+#define T_DEV 3
+
 // Inodes per block.
 #define IPB           (BSIZE / sizeof(struct dinode))
 

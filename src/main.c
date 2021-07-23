@@ -6,9 +6,10 @@
 #include <stdlib.h>
 #include <errno.h>
 
-
+#include <unistd.h>
 #include "fs.h"
 
+#define PATH_TO_FS "/home/josh/Desktop/fuse_test/fs.img"
 FILE *f = 0;
 
 /** 
@@ -23,19 +24,22 @@ static int test_stat(fuse_ino_t ino, struct stat *stbuf) {
 
     memset(&ip, 0, sizeof ip);
 
-    iget(ino, &ip, f);
-    
-    if(stbuf->st_ino == 1) {
-        stbuf->st_mode = S_IFDIR| 0755;
-        stbuf->st_nlink = 2;
-        return 0;
+    if(iget(ino, &ip, f)) {
+        printf("Inode error\n");
+        return 1;
     }
 
 
+    if(ip.type == T_DIR) {
+        stbuf->st_mode = S_IFDIR | 0775;
+    } else {
+        stbuf->st_mode = S_IFREG | 0445;
+    }
 
-
-    stbuf->st_mode = S_IFREG | 0444;
-    stbuf->st_nlink = 1;
+    stbuf->st_nlink     = ip.nlink;
+    stbuf->st_size      = ip.size;
+    stbuf->st_ino       = ip.inum;
+    
     return 0;
     
 }
@@ -44,9 +48,7 @@ static void test_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *
     
     struct stat stbuf;
     int result = 0;
-    
-    printf("\n\tAttempting to GETATTR\n");
-    
+
     (void) fi;
     memset(&stbuf, 0, sizeof stbuf);
 
@@ -60,6 +62,80 @@ static void test_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *
 
 }
 
+struct dirbuf {
+    char *p;
+    size_t size;
+};
+
+
+
+static void dirbuf_add(fuse_req_t req, struct dirbuf *b, const char *name, fuse_ino_t ino) {
+    struct stat stbuf;
+    size_t old_size = 0;
+
+    memset(&stbuf, 0, sizeof stbuf);
+    stbuf.st_ino = ino;
+
+
+    old_size = b->size;
+    b->size += fuse_add_direntry(req, 0, 0, name, 0, 0);
+    b->p = realloc(b->p, b->size);
+
+    fuse_add_direntry(req, b->p + old_size, b->size - old_size, name, &stbuf, b->size);
+
+}
+
+#define min(x, y) ( (x) < (y) ? (x) : (y))
+static int reply_buf_limited(fuse_req_t req, const char *buf, size_t bufsize, off_t offset, size_t maxsize){
+
+    
+    
+    if(offset < (long)(bufsize)) {
+        return fuse_reply_buf(req, buf + offset, min(bufsize - offset, maxsize));
+    } 
+
+    return fuse_reply_buf(req, 0, 0);
+}
+
+static void test_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, struct fuse_file_info *fi) {
+    
+    struct dirbuf b;
+
+    struct inode ip;
+    struct dirent *d;
+    int index;
+    int offset;
+    unsigned char buffer[BSIZE];
+    
+    (void) fi;
+
+    memset(&b, 0, sizeof b);
+    memset(&ip, 0, sizeof ip);
+    memset(buffer, 0, sizeof buffer);
+
+    if(iget(ino, &ip, f)){
+        fuse_reply_buf(req, 0, 0);
+        return;
+    }
+
+    for(index = 0; ip.addrs[index] != 0 && index < NDIRECT;index++) {
+        offset = 0;
+        rsec(ip.addrs[index], buffer, f);
+        d = (struct dirent *)(buffer);
+        while(1) {
+            if(d->inum == 0)
+                break;
+            dirbuf_add(req, &b, d->name, d->inum);
+            offset += sizeof(struct dirent);
+            d = (struct dirent *)(buffer + offset);
+        }
+
+    }
+
+    reply_buf_limited(req, b.p, b.size, off, size);
+    free(b.p);
+    
+}
 
 
 /*
@@ -74,12 +150,12 @@ static void test_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *
 
 
 static const struct fuse_lowlevel_ops opers = {
-    .getattr    = test_getattr, 
+    .getattr    = test_getattr,
+    .readdir    = test_readdir, 
 };
 
 int main(int argc, char **argv) {
     int result = 0;
-    
 
     struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
     struct fuse_session *se = 0;
@@ -88,7 +164,7 @@ int main(int argc, char **argv) {
 
     memset(&opts, 0, sizeof opts);
     memset(&config, 0, sizeof config);
-
+   
 
 
     if(fuse_parse_cmdline(&args, &opts) != 0)
@@ -131,9 +207,10 @@ int main(int argc, char **argv) {
     }
     
     fuse_daemonize(opts.foreground);
+    
 
 
-    f = fopen("/home/pi/fuse_test/fs.img", "rb+");        // Open the file for reading/writing -> returns null if cant find it
+    f = fopen(PATH_TO_FS, "rb+");        // Open the file for reading/writing -> returns null if cant find it
 
     if(!f) {
         printf("Could not open fs.img\n");

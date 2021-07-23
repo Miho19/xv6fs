@@ -61,12 +61,9 @@ int iget(uint inum, struct inode *ip, FILE *f){
     struct dinode *diptr;
     int sector = 0;
     int result = 0;
+    int i;
 
-
-    struct dirent *d;
-    
     char buffer[BSIZE];
-
     memset(buffer, 0, sizeof buffer);
 
     if(inum > sb.ninodes)
@@ -76,49 +73,38 @@ int iget(uint inum, struct inode *ip, FILE *f){
 
     sector = IBLOCK(inum);
 
-    printf("Sector %d inum %d\n", sector, inum);
+    
     result = rsec(sector, buffer, f);
+    if(result != BSIZE) {
+        printf("Read Failure\t:%d\n", result);
+        return 1;
+    }
+
+    printf("inum\t:%d\nsector\t:%d\n", inum, sector);
 
     diptr = (struct dinode *)buffer + (inum % IPB);
     
 
 
-    printf("size %d\ntype %d\naddrs: %d\n", diptr->size, diptr->type, diptr->addrs[0]);
-    memset(buffer, 0, sizeof buffer);
+    printf("size\t:%d\ntype\t:%d\n", diptr->size, diptr->type);
+    printf("Block Addresses:\n\t[");
+    for(i=0;diptr->addrs[i] != 0;i++)
+        printf(" %d ", diptr->addrs[i]);
+    printf("]\n");
 
-
-    result = rsec(29 , buffer, f);
-	printf("%d bytes read\n", result);
+    //disk inode
+    ip->size    = diptr->size;
+    ip->type    = diptr->type;
+    ip->nlink   = diptr->nlink;
+    for(i=0;diptr->addrs[i] != 0; i++)
+        ip->addrs[i] = diptr->addrs[i];
     
-
-	d = ((struct dirent *) buffer);
-
-	result = 0;
-
-
-	while(1) {
-		
-		if(d->inum == 0)
-			break;
-		
-		printf("name: %s\tinum: %d\n", d->name, d->inum);
-		
-		d = (struct dirent *)(buffer + result);
-
-		result += sizeof(struct dirent);
-
-	}
-
-
-    while(1) {
-        if(getc(stdin))
-            break;
-    }
-
-
-
-
-
+    // memory inode
+    ip->inum    = inum;
+    ip->ref     = 1;
+    ip->dev     = 1;
+    ip->flags   = 0;
+   
     return 0;
 }
 
