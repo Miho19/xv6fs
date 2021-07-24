@@ -88,7 +88,7 @@ int iget(uint inum, struct inode *ip, FILE *f){
 
     printf("size\t:%d\ntype\t:%d\n", diptr->size, diptr->type);
     printf("Block Addresses:\n\t[");
-    for(i=0;diptr->addrs[i] != 0;i++)
+    for(i=0;diptr->addrs[i] != 0 && i < NDIRECT;i++)
         printf(" %d ", diptr->addrs[i]);
     printf("]\n");
 
@@ -96,7 +96,7 @@ int iget(uint inum, struct inode *ip, FILE *f){
     ip->size    = diptr->size;
     ip->type    = diptr->type;
     ip->nlink   = diptr->nlink;
-    for(i=0;diptr->addrs[i] != 0; i++)
+    for(i=0;diptr->addrs[i] != 0 && i < NDIRECT; i++)
         ip->addrs[i] = diptr->addrs[i];
     
     // memory inode

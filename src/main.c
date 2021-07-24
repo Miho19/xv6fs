@@ -12,11 +12,6 @@
 #define PATH_TO_FS "/home/josh/Desktop/fuse_test/fs.img"
 FILE *f = 0;
 
-/** 
-    TIMEOUTS ARE DOUBLES IN SECONDS
-    0755 default dir permissions
-    0444 default file permissions
-*/
 
 static int test_stat(fuse_ino_t ino, struct stat *stbuf) {
     stbuf->st_ino = ino;
@@ -137,12 +132,87 @@ static void test_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
     
 }
 
+/** 
+ *  Wants stat attributes in e.attrs;
+ * 
+ * 
+*/
+
+static void test_lookup(fuse_req_t req, fuse_ino_t parent, const char *name) {
+    
+    struct fuse_entry_param e;
+    struct inode ip;
+
+    fuse_ino_t query = 0;
+
+    struct dirent *d;
+    int index;
+    int offset;
+    unsigned char buffer[BSIZE];
+
+    memset(&e, 0, sizeof e);
+    memset(&ip, 0, sizeof ip);
+    
+
+
+    if(iget(parent, &ip, f)){
+        printf("Parent: %ld is not a valid inode\n", parent);
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
+
+    if(ip.type != T_DIR){
+        printf("Parent: %ld is not a directory\n", parent);
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
+
+    
+    for(index = 0; ip.addrs[index] != 0 && index < NDIRECT;index++){
+        offset = 0;
+        memset(buffer, 0, sizeof buffer);
+        rsec(ip.addrs[index], buffer, f);
+        d = (struct dirent *)(buffer);
+
+        while(1) {
+            if(!d->inum)
+                break;
+            if(strcmp(d->name, name) == 0){
+                query = d->inum;
+                break;
+            }
+            offset += sizeof(struct dirent);
+            d = (struct dirent*)(buffer + offset);
+        }
+
+        if(query)
+            break;
+    }
+
+    if(!query){
+        printf("Could not locate inode within parent: %ld\n", parent);
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
+
+    if(test_stat(query, &e.attr)){
+        printf("Query: %ld. Could not retrive stat\n", query);
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
+
+    e.ino = query;
+    e.attr_timeout = 100.0;
+    e.entry_timeout = 100.0;
+
+    fuse_reply_entry(req, &e);
+    
+}
+
 
 /*
 
-.lookup		= hello_ll_lookup,
-	.getattr	= hello_ll_getattr,
-	.readdir	= hello_ll_readdir,
+    .lookup		= hello_ll_lookup,
 	.open		= hello_ll_open,
 	.read		= hello_ll_read,
 
@@ -151,7 +221,8 @@ static void test_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 
 static const struct fuse_lowlevel_ops opers = {
     .getattr    = test_getattr,
-    .readdir    = test_readdir, 
+    .readdir    = test_readdir,
+    .lookup     = test_lookup, 
 };
 
 int main(int argc, char **argv) {
