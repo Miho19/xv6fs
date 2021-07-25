@@ -209,20 +209,99 @@ static void test_lookup(fuse_req_t req, fuse_ino_t parent, const char *name) {
     
 }
 
+static void test_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi){
+    
+    
+    printf("\n\t%ld: Opening file\n", ino);
 
-/*
+    if((fi->flags & O_ACCMODE) != O_RDONLY) {
+        fuse_reply_err(req, EACCES);
+    }
 
-    .lookup		= hello_ll_lookup,
-	.open		= hello_ll_open,
-	.read		= hello_ll_read,
+    fuse_reply_open(req, fi);
+    
+}
 
-*/
+static uint bmap(struct inode *ip, uint bn) {
+
+    unsigned char buffer[BSIZE];
+    uint *a;
+
+    memset(buffer, 0, sizeof buffer);
+
+    if(bn < NDIRECT){
+        if(ip->addrs[bn] == 0)
+            return 0;
+        return ip->addrs[bn];
+    }
+
+    bn -= NDIRECT;
+
+    if(bn > NINDIRECT)
+        return 0;
+    
+    if(rsec(ip->addrs[NDIRECT], buffer, f) < 512)
+        return 0;
+    
+    a = (uint *)(buffer);
+    
+    if(a[bn] == 0)
+        return 0;
+    
+    return a[bn];
+
+}
+
+static void test_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, struct fuse_file_info *fi) {
+    
+    struct inode ip;
+    struct dirbuf b;
+
+    uint bn = 0;
+    uint m = 0;
+    uint total = 0;
+    uint offset = 0;
+
+    
+    unsigned char buffer[BSIZE];
+    
+    (void) fi;
+    memset(buffer, 0, sizeof buffer);
+    memset(&ip, 0, sizeof ip);
+    memset(&b, 0, sizeof b);
+
+
+    if(iget(ino, &ip, f)) {
+        printf("Error obtaining inode: %ld in read\n", ino);
+        fuse_reply_err(req, EACCES);
+        return;
+    }
+
+
+    for(total = 0, offset = off; total < size; total += m, offset += m) {
+        memset(buffer, 0, sizeof buffer);
+        bn = bmap(&ip, offset/BSIZE);
+        rsec(bn, buffer, f);
+        m = min(size - total, BSIZE - offset % BSIZE);
+        b.size += m;
+        b.p = realloc(b.p, b.size);
+        memmove(b.p + total, buffer + (offset % BSIZE), m);
+    }
+    
+    
+    reply_buf_limited(req, b.p, b.size, off, size);
+    free(b.p);
+
+
+}
 
 
 static const struct fuse_lowlevel_ops opers = {
     .getattr    = test_getattr,
     .readdir    = test_readdir,
-    .lookup     = test_lookup, 
+    .lookup     = test_lookup,
+    .open       = test_open,
+    .read       = test_read,
 };
 
 int main(int argc, char **argv) {

@@ -90,7 +90,12 @@ int iget(uint inum, struct inode *ip, FILE *f){
     printf("Block Addresses:\n\t[");
     for(i=0;diptr->addrs[i] != 0 && i < NDIRECT;i++)
         printf(" %d ", diptr->addrs[i]);
-    printf("]\n");
+    printf("]");
+
+    diptr->addrs[NDIRECT] ? printf("[%d]\n", diptr->addrs[NDIRECT]) : printf("\n") ;
+
+
+    
 
     //disk inode
     ip->size    = diptr->size;
