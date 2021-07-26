@@ -103,7 +103,7 @@ struct inode {
 
 
 int iget(uint inum, struct inode *ip, FILE *f);
-
+int iupdate(struct inode *ip, FILE *f);
 
 
 #endif

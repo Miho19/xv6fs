@@ -54,7 +54,44 @@ int wsec(int sec, void *buf, FILE *f) {
     return result;
 }
 
+int iupdate(struct inode *ip, FILE *f){
+    struct dinode *diptr;
+    int sector = 0;
+    int result = 0;
+    
 
+    unsigned char buffer[BSIZE];
+
+    memset(buffer, 0, sizeof buffer);
+
+     if(!ip)
+        return 1;
+
+    if(ip->inum > sb.ninodes)
+        return 1;
+   
+
+    sector = IBLOCK(ip->inum);
+
+    result = rsec(sector, buffer, f);
+
+    if(result != BSIZE)
+        return 1;
+    
+    diptr = (struct dinode *)buffer + (ip->inum % IPB);
+
+    diptr->size = ip->size;
+
+    result = wsec(sector, buffer, f);
+
+    if(result != BSIZE){
+        printf("Updating inode %d failed\n", ip->inum);
+        return 1;
+    }
+
+
+    return 0;
+}
 
 
 int iget(uint inum, struct inode *ip, FILE *f){

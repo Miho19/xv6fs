@@ -26,15 +26,15 @@ static int test_stat(fuse_ino_t ino, struct stat *stbuf) {
 
 
     if(ip.type == T_DIR) {
-        stbuf->st_mode = S_IFDIR | 0775;
+        stbuf->st_mode = S_IFDIR | 00775;
     } else {
-        stbuf->st_mode = S_IFREG | 0445;
+        stbuf->st_mode = S_IFREG | 00775;
     }
 
     stbuf->st_nlink     = ip.nlink;
     stbuf->st_size      = ip.size;
     stbuf->st_ino       = ip.inum;
-    
+        
     return 0;
     
 }
@@ -190,7 +190,7 @@ static void test_lookup(fuse_req_t req, fuse_ino_t parent, const char *name) {
     }
 
     if(!query){
-        printf("Could not locate inode within parent: %ld\n", parent);
+        printf("Could not locate %s within parent: %ld\n", name, parent);
         fuse_reply_err(req, ENOENT);
         return;
     }
@@ -211,11 +211,19 @@ static void test_lookup(fuse_req_t req, fuse_ino_t parent, const char *name) {
 
 static void test_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi){
     
+    struct stat stbuf;
     
     printf("\n\t%ld: Opening file\n", ino);
 
-    if((fi->flags & O_ACCMODE) != O_RDONLY) {
-        fuse_reply_err(req, EACCES);
+    memset(&stbuf, 0, sizeof stbuf);
+
+    test_stat(ino, &stbuf);
+    
+    fi->fh = 0;
+
+    if(fi->flags & O_APPEND){
+        printf("\n\tAPPEND MODE: %ld\n", stbuf.st_size);
+        fi->fh = stbuf.st_size;
     }
 
     fuse_reply_open(req, fi);
@@ -294,6 +302,46 @@ static void test_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, st
 
 
 }
+/** offset: 1929 */
+
+static void test_write(fuse_req_t req, fuse_ino_t ino, const char *buf, size_t size, off_t off, struct fuse_file_info *fi) {
+    
+    size_t offset = off;
+    size_t total = 0;
+    uint bn = 0;
+    uint m = 0;
+
+    struct inode ip;
+
+    unsigned char buffer[BSIZE];
+
+    memset(&ip, 0, sizeof ip);
+
+    printf("\nWRITE\nino:\t%ld\nsize:\t%ld\noffset:\t%ld\nfi->fh:\t%ld\n", ino, size, off, fi->fh);
+
+    if(iget(ino, &ip, f)){
+        fuse_reply_write(req, 0);
+        return;
+    }
+
+    for(total = 0, offset = off; total < size; total += m, offset += m) {
+        bn = bmap(&ip, offset/BSIZE);
+        rsec(bn, buffer, f);
+        m = min(size - total, BSIZE - (offset % BSIZE));
+        memmove(buffer + (offset % BSIZE), buf + total, m);
+        wsec(bn, buffer, f);
+    }
+
+    if(total > 0 && offset > ip.size) {
+        ip.size = offset;
+        iupdate(&ip, f);
+    }
+
+
+
+    fuse_reply_write(req, total);
+    
+}
 
 
 static const struct fuse_lowlevel_ops opers = {
@@ -302,6 +350,7 @@ static const struct fuse_lowlevel_ops opers = {
     .lookup     = test_lookup,
     .open       = test_open,
     .read       = test_read,
+    .write      = test_write,
 };
 
 int main(int argc, char **argv) {
