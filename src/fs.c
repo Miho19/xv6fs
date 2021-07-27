@@ -1,10 +1,9 @@
-#include "fs.h" 
-
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
 
+#include "fs.h" 
 
 static struct superblock sb;
 
@@ -25,6 +24,15 @@ void superblock_init(FILE *f){
     sb.nblocks = s->nblocks;
     sb.ninodes = s->ninodes;
     sb.nlog = s->nlog;
+
+    printf("Press any key to continue...\n");
+    
+    while(1) {
+        if(getc(stdin))
+            break;
+    }
+
+
 }
 
 
@@ -58,6 +66,7 @@ int iupdate(struct inode *ip, FILE *f){
     struct dinode *diptr;
     int sector = 0;
     int result = 0;
+    int i;
     
 
     unsigned char buffer[BSIZE];
@@ -80,7 +89,17 @@ int iupdate(struct inode *ip, FILE *f){
     
     diptr = (struct dinode *)buffer + (ip->inum % IPB);
 
-    diptr->size = ip->size;
+    diptr->size     = ip->size;
+    diptr->nlink    = ip->nlink;
+    diptr->type     = ip->type;
+
+    for(i=0;i<NDIRECT && diptr->addrs[i] != 0; i++){
+        ip->addrs[i] = diptr->addrs[i];
+    }
+    
+    diptr->addrs[NDIRECT] = ip->addrs[NDIRECT];
+
+
 
     result = wsec(sector, buffer, f);
 
@@ -151,6 +170,21 @@ int iget(uint inum, struct inode *ip, FILE *f){
 }
 
 
+static void blkzero(uint bn, FILE *f){
+    unsigned char buffer[BSIZE];
+    memset(buffer, 0, sizeof buffer);
+    wsec(bn, buffer, f);
+}
+
+uint blkalloc(FILE *f){
+    uint bn = 0;
+    int b;
+
+    
+
+
+    return bn;
+}
 
 
 

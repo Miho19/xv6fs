@@ -363,8 +363,15 @@ int main(int argc, char **argv) {
 
     memset(&opts, 0, sizeof opts);
     memset(&config, 0, sizeof config);
-   
 
+    f = fopen("fs.img", "rb+");        
+
+    if(!f) {
+        printf("Could not open fs.img\n");
+        return 1;
+    }
+
+    superblock_init(f);
 
     if(fuse_parse_cmdline(&args, &opts) != 0)
         return 1;
@@ -406,24 +413,7 @@ int main(int argc, char **argv) {
     }
     
     fuse_daemonize(opts.foreground);
-    
 
-
-    f = fopen(PATH_TO_FS, "rb+");        // Open the file for reading/writing -> returns null if cant find it
-
-    if(!f) {
-        printf("Could not open fs.img\n");
-        goto err_4;
-    }
-
-    superblock_init(f);
-
-    printf("Press any key to continue...\n");
-    
-    while(1) {
-        if(getc(stdin))
-            break;
-    }
 
     if(opts.singlethread) {
         result = fuse_session_loop(se);
@@ -433,10 +423,8 @@ int main(int argc, char **argv) {
         result = fuse_session_loop_mt(se, &config);
     }
 
-    fclose(f);
-
-    err_4:
-        fuse_session_unmount(se);
+    
+    fuse_session_unmount(se);
     err_3:
         fuse_remove_signal_handlers(se);
     err_2:
@@ -444,6 +432,7 @@ int main(int argc, char **argv) {
     err_1:
         free(opts.mountpoint);
         fuse_opt_free_args(&args);
+        fclose(f);
 
     printf("\nEXIT CODE: %d\n", result);
     return result ? 1 : 0;

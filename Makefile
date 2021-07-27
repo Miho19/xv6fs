@@ -16,7 +16,7 @@ EXE = main
 options = -d -f -s
 MOUNT_POINT = mnt
 
-.PHONY: all run clean
+.PHONY: all run stop clean
 
 
 
@@ -35,6 +35,8 @@ $(OBJ) $(MOUNT_POINT):
 run: $(EXE) | $(MOUNT_POINT)
 	./$(EXE) $(options) $(MOUNT_POINT)
 
+stop: $(EXE) | $(MOUNT_POINT)
+	fusermount -u $(MOUNT_POINT)
 
 clean:
 	$(RM) -r $(OBJ) $(MOUNT_POINT) $(EXE)
