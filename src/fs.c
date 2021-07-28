@@ -144,7 +144,7 @@ int iget(uint inum, struct inode *ip, FILE *f){
     
 
 
-    printf("size\t:%d\ntype\t:%d\n", diptr->size, diptr->type);
+    printf("size\t:%d\ntype\t:%d\nnlink\t:%d\n", diptr->size, diptr->type, diptr->nlink);
     printf("Block Addresses:\n\t[");
     for(i=0;diptr->addrs[i] != 0 && i < NDIRECT;i++)
         printf(" %d ", diptr->addrs[i]);
@@ -296,10 +296,12 @@ int iremove(struct inode *ip, FILE *f){
 
     if(diptr->type != ip->type)
         return 1;
-    
+    printf("1\n");
     for(i=0;i<NDIRECT && diptr->addrs[i] != 0;i++){
         blkfree(diptr->addrs[i], f);
     }
+
+    printf("2\n");
 
     if(diptr->addrs[NDIRECT] != 0){
         memset(indirect, 0, sizeof indirect);
@@ -311,9 +313,13 @@ int iremove(struct inode *ip, FILE *f){
 
         blkfree(diptr->addrs[NDIRECT], f);
     }
+
+    printf("3\n");
     
     memset(diptr, 0, sizeof *diptr);
     wsec(IBLOCK(ip->inum), buffer, f);
+
+    printf("4\n");
     return 0;
 }
 
