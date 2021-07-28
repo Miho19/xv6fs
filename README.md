@@ -13,15 +13,15 @@ vim mnt/README
 ```
 
 ## Task List:
--[x] Read and write files.
--[x] Create files.
--[ ] Remove files.
--[ ] Create directories.
--[ ] Remove directories.
--[x] Mount fs.img.
--[ ] Mount USB mass storage device.
--[ ] Output log messages to a text file.
--[ ] Unit tests.
+- [x] Read and write files.
+- [x] Create files.
+- [ ] Remove files.
+- [ ] Create directories.
+- [ ] Remove directories.
+- [x] Mount fs.img.
+- [ ] Mount USB mass storage device.
+- [ ] Output log messages to a text file.
+- [ ] Unit tests.
 
 ## Issues:
 * Currently new files are being added at very high inode numbers unknown as to why.
