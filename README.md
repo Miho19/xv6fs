@@ -14,7 +14,7 @@ vim mnt/README
 
 ## Task List:
 -[x] Read and write files.
--[ ] Create files.
+-[x] Create files.
 -[ ] Remove files.
 -[ ] Create directories.
 -[ ] Remove directories.
@@ -24,5 +24,6 @@ vim mnt/README
 -[ ] Unit tests.
 
 ## Issues:
-
+* Currently new files are being added at very high inode numbers unknown as to why.
+* Sometimes creating files causes the root directory to be overwritten, specifically the type field.
 

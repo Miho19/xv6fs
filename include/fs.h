@@ -14,6 +14,9 @@
 #define T_FILE 2
 #define T_DEV 3
 
+#define WRITE_MODE 1
+#define READ_MODE 0
+
 // Inodes per block.
 #define IPB           (BSIZE / sizeof(struct dinode))
 
@@ -104,6 +107,10 @@ struct inode {
 
 int iget(uint inum, struct inode *ip, FILE *f);
 int iupdate(struct inode *ip, FILE *f);
+int ialloc(struct inode *ip, short type, FILE *f);
+int ilink(uint parent, const char *name, struct inode *ip, FILE *f);
+int iremove(struct inode *ip, FILE *f);
 
+uint blkalloc(FILE *f);
 
 #endif

@@ -1,6 +1,8 @@
 {
     "files.associations": {
-        "fuse_lowlevel.h": "c"
+        "fuse_lowlevel.h": "c",
+        "compare": "c",
+        "type_traits": "c"
     },
     "C_Cpp.errorSquiggles": "Disabled"
 }

@@ -6,14 +6,14 @@
 #include <stdlib.h>
 #include <errno.h>
 
-#include <unistd.h>
+
+
 #include "fs.h"
 
-#define PATH_TO_FS "/home/josh/Desktop/fuse_test/fs.img"
 FILE *f = 0;
 
 
-static int test_stat(fuse_ino_t ino, struct stat *stbuf) {
+static int xv6_stat(fuse_ino_t ino, struct stat *stbuf) {
     stbuf->st_ino = ino;
     struct inode ip;
 
@@ -39,7 +39,7 @@ static int test_stat(fuse_ino_t ino, struct stat *stbuf) {
     
 }
 
-static void test_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi){
+static void xv6_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi){
     
     struct stat stbuf;
     int result = 0;
@@ -47,7 +47,7 @@ static void test_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *
     (void) fi;
     memset(&stbuf, 0, sizeof stbuf);
 
-    result = test_stat(ino, &stbuf);
+    result = xv6_stat(ino, &stbuf);
 
     if(result) {
         fuse_reply_err(req, ENOENT);
@@ -92,7 +92,7 @@ static int reply_buf_limited(fuse_req_t req, const char *buf, size_t bufsize, of
     return fuse_reply_buf(req, 0, 0);
 }
 
-static void test_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, struct fuse_file_info *fi) {
+static void xv6_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, struct fuse_file_info *fi) {
     
     struct dirbuf b;
 
@@ -138,7 +138,7 @@ static void test_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
  * 
 */
 
-static void test_lookup(fuse_req_t req, fuse_ino_t parent, const char *name) {
+static void xv6_lookup(fuse_req_t req, fuse_ino_t parent, const char *name) {
     
     struct fuse_entry_param e;
     struct inode ip;
@@ -195,7 +195,7 @@ static void test_lookup(fuse_req_t req, fuse_ino_t parent, const char *name) {
         return;
     }
 
-    if(test_stat(query, &e.attr)){
+    if(xv6_stat(query, &e.attr)){
         printf("Query: %ld. Could not retrive stat\n", query);
         fuse_reply_err(req, ENOENT);
         return;
@@ -209,7 +209,7 @@ static void test_lookup(fuse_req_t req, fuse_ino_t parent, const char *name) {
     
 }
 
-static void test_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi){
+static void xv6_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi){
     
     struct stat stbuf;
     
@@ -217,7 +217,7 @@ static void test_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
     memset(&stbuf, 0, sizeof stbuf);
 
-    test_stat(ino, &stbuf);
+    xv6_stat(ino, &stbuf);
     
     fi->fh = 0;
 
@@ -230,16 +230,27 @@ static void test_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
     
 }
 
-static uint bmap(struct inode *ip, uint bn) {
+static uint bmap(struct inode *ip, uint bn, int mode) {
 
     unsigned char buffer[BSIZE];
     uint *a;
+    uint new_block = 0;
 
     memset(buffer, 0, sizeof buffer);
 
     if(bn < NDIRECT){
-        if(ip->addrs[bn] == 0)
-            return 0;
+        if(ip->addrs[bn] == 0){
+            if(mode == READ_MODE)
+                return 0;
+
+            new_block = blkalloc(f);
+            if(!new_block){
+                printf("Error creating new block for writing\n");
+                return 0;
+            }
+            ip->addrs[bn] = new_block;
+            iupdate(ip, f);
+        }
         return ip->addrs[bn];
     }
 
@@ -253,14 +264,25 @@ static uint bmap(struct inode *ip, uint bn) {
     
     a = (uint *)(buffer);
     
-    if(a[bn] == 0)
-        return 0;
+    if(a[bn] == 0) {
+        if(mode == READ_MODE)
+            return 0;
+        new_block = blkalloc(f);
+
+        if(!new_block){
+            printf("Error allocating new block within indirect block for writing\n");
+            return 0;
+        }
+
+        a[bn] = new_block;
+        wsec(ip->addrs[NDIRECT], buffer, f);
+    }
     
     return a[bn];
 
 }
 
-static void test_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, struct fuse_file_info *fi) {
+static void xv6_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, struct fuse_file_info *fi) {
     
     struct inode ip;
     struct dirbuf b;
@@ -288,7 +310,11 @@ static void test_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, st
 
     for(total = 0, offset = off; total < size; total += m, offset += m) {
         memset(buffer, 0, sizeof buffer);
-        bn = bmap(&ip, offset/BSIZE);
+        bn = bmap(&ip, offset/BSIZE, READ_MODE);
+        if(!bn){
+            printf("Ending read early\n");
+            break;
+        }
         rsec(bn, buffer, f);
         m = min(size - total, BSIZE - offset % BSIZE);
         b.size += m;
@@ -302,9 +328,8 @@ static void test_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, st
 
 
 }
-/** offset: 1929 */
 
-static void test_write(fuse_req_t req, fuse_ino_t ino, const char *buf, size_t size, off_t off, struct fuse_file_info *fi) {
+static void xv6_write(fuse_req_t req, fuse_ino_t ino, const char *buf, size_t size, off_t off, struct fuse_file_info *fi) {
     
     size_t offset = off;
     size_t total = 0;
@@ -325,7 +350,11 @@ static void test_write(fuse_req_t req, fuse_ino_t ino, const char *buf, size_t s
     }
 
     for(total = 0, offset = off; total < size; total += m, offset += m) {
-        bn = bmap(&ip, offset/BSIZE);
+        bn = bmap(&ip, offset/BSIZE, WRITE_MODE);
+        if(!bn){
+            printf("Writing error\n");
+            break;
+        }
         rsec(bn, buffer, f);
         m = min(size - total, BSIZE - (offset % BSIZE));
         memmove(buffer + (offset % BSIZE), buf + total, m);
@@ -343,14 +372,60 @@ static void test_write(fuse_req_t req, fuse_ino_t ino, const char *buf, size_t s
     
 }
 
+static void xv6_create(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode, struct fuse_file_info *fi){
+    
+    struct fuse_entry_param e;
+    struct inode ip;
+    short type = T_FILE;
+
+    
+
+    memset(&ip, 0, sizeof ip);
+    
+    if((mode & S_IFMT) == S_IFDIR) {
+        type = T_DIR;
+    }
+
+    printf("Creating\t%s\nParent\t%ld\ntype\t%s\n\n", name, parent, type == T_FILE ? "File" : "Directory");
+    
+
+    if(ialloc(&ip, type, f)){
+        printf("ialloc: Error creating file %s\n", name);
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
+
+    
+
+    if(ilink(parent, name, &ip, f)) {
+        printf("ilink: Error adding file to parent %ld\n", parent);
+        iremove(&ip, f);
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
+
+    
+
+    memset(&e, 0, sizeof e);
+    e.attr_timeout      = 100.0;
+    e.entry_timeout     = 100.0;
+    e.ino               = ip.inum;
+    xv6_stat(e.ino, &e.attr);
+
+    fuse_reply_create(req, &e, fi);
+
+}
+
+
 
 static const struct fuse_lowlevel_ops opers = {
-    .getattr    = test_getattr,
-    .readdir    = test_readdir,
-    .lookup     = test_lookup,
-    .open       = test_open,
-    .read       = test_read,
-    .write      = test_write,
+    .getattr    = xv6_getattr,
+    .readdir    = xv6_readdir,
+    .lookup     = xv6_lookup,
+    .open       = xv6_open,
+    .read       = xv6_read,
+    .write      = xv6_write,
+    .create     = xv6_create,
 };
 
 int main(int argc, char **argv) {
@@ -360,6 +435,8 @@ int main(int argc, char **argv) {
     struct fuse_session *se = 0;
     struct fuse_cmdline_opts opts;
     struct fuse_loop_config config;
+
+    struct inode ip;
 
     memset(&opts, 0, sizeof opts);
     memset(&config, 0, sizeof config);
@@ -372,6 +449,10 @@ int main(int argc, char **argv) {
     }
 
     superblock_init(f);
+    memset(&ip, 0, sizeof ip);
+    iget(1, &ip, f);
+    ip.type = 1;
+    iupdate(&ip, f);
 
     if(fuse_parse_cmdline(&args, &opts) != 0)
         return 1;

@@ -11,7 +11,7 @@ OBJ = obj
 SRCS := $(wildcard $(SRC)/*.c)
 OBJS := $(patsubst $(SRC)/%.c, $(OBJ)/%.o, $(SRCS))
 
-EXE = main
+EXE = xv6fs
 
 options = -d -f -s
 MOUNT_POINT = mnt
