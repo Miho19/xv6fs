@@ -35,7 +35,6 @@ void superblock_init(FILE *f){
 
 }
 
-
 int rsec(int sec, void *buf, FILE *f) {
     int result = 0;
 
@@ -95,13 +94,11 @@ int iupdate(struct inode *ip, FILE *f){
     diptr->nlink    = ip->nlink;
     diptr->type     = ip->type;
 
-    for(i=0;i<NDIRECT && diptr->addrs[i] != 0; i++){
-        ip->addrs[i] = diptr->addrs[i];
+    for(i=0;i<NDIRECT; i++){
+        diptr->addrs[i] = ip->addrs[i];
     }
     
     diptr->addrs[NDIRECT] = ip->addrs[NDIRECT];
-
-
 
     result = wsec(sector, buffer, f);
 
@@ -113,7 +110,6 @@ int iupdate(struct inode *ip, FILE *f){
 
     return 0;
 }
-
 
 int iget(uint inum, struct inode *ip, FILE *f){
     struct dinode *diptr;
@@ -171,7 +167,6 @@ int iget(uint inum, struct inode *ip, FILE *f){
     return 0;
 }
 
-
 static void blkzero(uint bn, FILE *f){
     unsigned char buffer[BSIZE];
     memset(buffer, 0, sizeof buffer);
@@ -203,8 +198,6 @@ uint blkalloc(FILE *f){
     printf("Block Allocation error: out of blocks\n");
     return 0;
 }
-
-
 
 int ialloc(struct inode *ip, short type, FILE *f){
     uint inum;
@@ -270,7 +263,6 @@ static void blkfree(uint bn, FILE *f) {
     buffer[bit_index / 8] &= ~mask;
     wsec(BBLOCK(bn, sb.ninodes), buffer, f);
 }
-
 
 int iremove(struct inode *ip, FILE *f){
     
@@ -467,7 +459,6 @@ int ilink(uint parent, const char *name, struct inode *ip, FILE *f){
     printf("ilink: Couldn't add %s to parent %d likely no space left\n", name, pip.inum);
     return 1;
 }
-
 
 int nparent(uint parent, const char *name, struct inode *ip, FILE *f, struct dirent_offset * doff){
 
@@ -667,3 +658,85 @@ int iparent(uint parent, uint query, char *name, struct inode *ip, FILE *f, stru
     return 1;
 }
 
+/** *
+ *  BMAP function designed for writing purpose.
+ *  Will allocate a new block for writing if 
+ *  bn supplied is not allocated already.
+ * 
+ */
+
+uint bmapw(struct inode *ip, uint bn, FILE *f) {
+
+    unsigned char buffer[BSIZE];
+    uint *a;
+
+    memset(buffer, 0, sizeof buffer);
+
+    if(bn < NDIRECT){
+
+        if(ip->addrs[bn] == 0){
+            printf("bmapw: Allocating new block for %d\n", ip->inum);
+            ip->addrs[bn] = blkalloc(f);
+            iupdate(ip, f);
+        }
+
+        return ip->addrs[bn];
+    }
+
+    bn -= NDIRECT;
+
+    if(bn > NINDIRECT)
+        return 0;
+    
+    if(ip->addrs[NDIRECT] == 0) {
+        printf("bmapw: Allocating indirect block for %d\n", ip->inum);
+        ip->addrs[NDIRECT] = blkalloc(f);
+        iupdate(ip, f);
+    }
+
+    rsec(ip->addrs[NDIRECT], buffer, f);
+
+    a = (uint *)(buffer);
+    
+    if(a[bn] == 0) {
+        printf("bmapw: Allocating indirect block pointer for %d\n", ip->inum);
+        a[bn] = blkalloc(f);
+        wsec(ip->addrs[NDIRECT], buffer, f);
+    }
+
+    return a[bn];
+}
+
+/** 
+ * Reading BMAP.
+ * Similar to writing BMAP but will not allocate
+ * a new block if bn is not allocated already.
+ * 
+*/
+
+uint bmapr(struct inode *ip, uint bn, FILE *f) {
+
+    unsigned char buffer[BSIZE];
+    uint *a;
+
+    memset(buffer, 0, sizeof buffer);
+
+    if(bn < NDIRECT){
+        return ip->addrs[bn] == 0 ? 0: ip->addrs[bn];
+    }
+
+    bn -= NDIRECT;
+
+    if(bn > NINDIRECT)
+        return 0;
+    
+    if(rsec(ip->addrs[NDIRECT], buffer, f) < 512)
+        return 0;
+    
+    a = (uint *)(buffer);
+    
+    if(a[bn] == 0)
+        return 0;
+
+    return a[bn];
+}

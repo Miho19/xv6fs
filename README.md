@@ -22,9 +22,10 @@ vim mnt/README
 - [ ] Mount USB mass storage device.
 - [ ] Output log messages to a text file.
 - [ ] Unit tests.
-- [ ] Implement SETTATTR and FLUSH 
-
+- [ ] Implement FLUSH / fsync function. 
+- [ ] Documentation. 
 ## Issues:
-* Currently new files are being added at very high inode numbers unknown as to why.
-* Sometimes creating files causes the root directory to be overwritten, specifically the type field.
+* The code in `xv6_readdir`smells bad because this is repeated code in `nparent` and `iparent`.
 
+## Change list:
+* Added more functions to to better find an inode given a parent. Now can use name or inode number.

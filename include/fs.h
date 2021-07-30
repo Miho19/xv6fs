@@ -119,7 +119,8 @@ int iremove(struct inode *ip, FILE *f);
 int nparent(uint parent, const char *name, struct inode *ip, FILE *f, struct dirent_offset * doff);
 int iparent(uint parent, uint query, char *name, struct inode *ip, FILE *f, struct dirent_offset * doff);
 
-
+uint bmapw(struct inode *ip, uint bn, FILE *f);
+uint bmapr(struct inode *ip, uint bn, FILE *f);
 
 
 uint blkalloc(FILE *f);
