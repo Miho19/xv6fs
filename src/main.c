@@ -438,8 +438,6 @@ int main(int argc, char **argv) {
     struct fuse_cmdline_opts opts;
     struct fuse_loop_config config;
 
-    struct inode ip;
-
     memset(&opts, 0, sizeof opts);
     memset(&config, 0, sizeof config);
     
@@ -452,10 +450,7 @@ int main(int argc, char **argv) {
     }
 
     superblock_init(f);
-    memset(&ip, 0, sizeof ip);
-    iget(1, &ip, f);
-    ip.type = 1;
-    iupdate(&ip, f);
+    
 
     if(fuse_parse_cmdline(&args, &opts) != 0)
         return 1;

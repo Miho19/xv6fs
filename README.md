@@ -23,7 +23,8 @@ vim mnt/README
 - [ ] Output log messages to a text file.
 - [ ] Unit tests.
 - [ ] Implement FLUSH / fsync function. 
-- [ ] Documentation. 
+- [ ] Documentation.
+ 
 ## Issues:
 * The code in `xv6_readdir`smells bad because this is repeated code in `nparent` and `iparent`.
 

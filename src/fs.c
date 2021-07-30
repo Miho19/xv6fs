@@ -7,7 +7,6 @@
 
 static struct superblock sb;
 
-
 void superblock_init(FILE *f){
     struct superblock *s;
     unsigned char buffer[512];
