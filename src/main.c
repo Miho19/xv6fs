@@ -13,6 +13,7 @@
 FILE *f = 0;
 
 
+
 static int xv6_stat(fuse_ino_t ino, struct stat *stbuf) {
     stbuf->st_ino = ino;
     struct inode ip;
@@ -98,9 +99,11 @@ static void xv6_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, 
 
     struct inode ip;
     struct dirent *d;
-    int index;
-    int offset;
+    uint index = 0;
+    uint offset = 0;
     unsigned char buffer[BSIZE];
+    unsigned char indirect[BSIZE];
+    uint *a;
     
     (void) fi;
 
@@ -113,18 +116,35 @@ static void xv6_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, 
         return;
     }
 
-    for(index = 0; ip.addrs[index] != 0 && index < NDIRECT;index++) {
-        offset = 0;
+    for(index = 0;index < NDIRECT;index++){
+        if(ip.addrs[index] == 0)
+            continue;
+        memset(buffer, 0, sizeof buffer);
         rsec(ip.addrs[index], buffer, f);
-        d = (struct dirent *)(buffer);
-        while(1) {
-            if(d->inum == 0)
-                break;
-            dirbuf_add(req, &b, d->name, d->inum);
-            offset += sizeof(struct dirent);
-            d = (struct dirent *)(buffer + offset);
-        }
 
+        for(offset = 0;offset < BSIZE; offset += sizeof(struct dirent)){
+            d = (struct dirent *)(buffer + offset % BSIZE);
+            if(d->inum == 0)
+                continue;
+            dirbuf_add(req, &b, d->name, d->inum);
+        }
+    }
+
+    if(ip.addrs[NDIRECT]) {
+        memset(indirect, 0, sizeof indirect);
+        rsec(ip.addrs[NDIRECT], indirect, f);
+        a = (uint *)indirect;
+        for(index = 0; index < BSIZE; index++){
+            if(a[index] == 0)
+                continue;
+            rsec(a[index], buffer, f);
+            for(offset = 0; offset < BSIZE; offset += sizeof(struct dirent)){
+                d = (struct dirent *)(buffer + offset % BSIZE);
+                if(d->inum == 0)
+                    continue;
+                dirbuf_add(req, &b, d->name, d->inum);
+            }
+        }
     }
 
     reply_buf_limited(req, b.p, b.size, off, size);
@@ -143,65 +163,22 @@ static void xv6_lookup(fuse_req_t req, fuse_ino_t parent, const char *name) {
     struct fuse_entry_param e;
     struct inode ip;
 
-    fuse_ino_t query = 0;
-
-    struct dirent *d;
-    int index;
-    int offset;
-    unsigned char buffer[BSIZE];
-
     memset(&e, 0, sizeof e);
     memset(&ip, 0, sizeof ip);
     
-
-
-    if(iget(parent, &ip, f)){
-        printf("Parent: %ld is not a valid inode\n", parent);
+    if(nparent(parent, name, &ip, f, 0)){
+        printf("lookup: Could not retrieve inode from parent %ld\n", parent);
         fuse_reply_err(req, ENOENT);
         return;
     }
-
-    if(ip.type != T_DIR){
-        printf("Parent: %ld is not a directory\n", parent);
-        fuse_reply_err(req, ENOENT);
-        return;
-    }
-
     
-    for(index = 0; ip.addrs[index] != 0 && index < NDIRECT;index++){
-        offset = 0;
-        memset(buffer, 0, sizeof buffer);
-        rsec(ip.addrs[index], buffer, f);
-        d = (struct dirent *)(buffer);
-
-        while(1) {
-            if(!d->inum)
-                break;
-            if(strcmp(d->name, name) == 0){
-                query = d->inum;
-                break;
-            }
-            offset += sizeof(struct dirent);
-            d = (struct dirent*)(buffer + offset);
-        }
-
-        if(query)
-            break;
-    }
-
-    if(!query){
-        printf("Could not locate %s within parent: %ld\n", name, parent);
+    if(xv6_stat(ip.inum, &e.attr)){
+        printf("lookup: Could not retrive stat inode %d\n", ip.inum);
         fuse_reply_err(req, ENOENT);
         return;
     }
 
-    if(xv6_stat(query, &e.attr)){
-        printf("Query: %ld. Could not retrive stat\n", query);
-        fuse_reply_err(req, ENOENT);
-        return;
-    }
-
-    e.ino = query;
+    e.ino = ip.inum;
     e.attr_timeout = 100.0;
     e.entry_timeout = 100.0;
 
@@ -374,8 +351,6 @@ static void xv6_create(fuse_req_t req, fuse_ino_t parent, const char *name, mode
     struct inode ip;
     short type = T_FILE;
 
-    
-
     memset(&ip, 0, sizeof ip);
     
     if((mode & S_IFMT) == S_IFDIR) {
@@ -391,16 +366,12 @@ static void xv6_create(fuse_req_t req, fuse_ino_t parent, const char *name, mode
         return;
     }
 
-    
-
     if(ilink(parent, name, &ip, f)) {
         printf("ilink: Error adding file to parent %ld\n", parent);
         iremove(&ip, f);
         fuse_reply_err(req, ENOENT);
         return;
     }
-
-    
 
     memset(&e, 0, sizeof e);
     e.attr_timeout      = 100.0;
@@ -412,119 +383,96 @@ static void xv6_create(fuse_req_t req, fuse_ino_t parent, const char *name, mode
 
 }
 
+
 static void xv6_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup){
     struct inode ip;
 
     memset(&ip, 0, sizeof ip);
 
     iget(ino, &ip, f);
-    printf("forget:\tino: %d\n\tnlinks: %d\n\tDecrease: %ld\n\n", ip.inum, ip.nlink, nlookup);
-
     ip.nlink -= nlookup;
     iupdate(&ip, f);
+   
+    printf("forget:\ninum\t:%ld\nnlink\t:%d\n", ino, ip.nlink);
 
-    fuse_reply_none(req);
+    if(ip.nlink > 0){
+        printf("forget: Link amount %d \n", ip.nlink);
+        fuse_reply_none(req);
+        return;
+    }
+
+    if(ip.inum == 1){
+        fuse_reply_none(req);
+        return;
+    }
+
+    if(ip.type == T_DIR){
+        printf("forget: Removing directory currently not implemented\n");
+        fuse_reply_none(req);
+        return;
+    }
+
+    if(iremove(&ip, f)){
+        printf("forget: Error removing file using iremove\n");
+        fuse_reply_none(req);
+        return;
+    }
+
 }
-/** fuse_reply_err(req, );*/
+
 
 static void xv6_unlink(fuse_req_t req, fuse_ino_t parent, const char *name){
+    
     struct inode ip;
     struct inode pip;
+    struct dirent_offset doff;
 
-    struct dirent *d;
     unsigned char buffer[BSIZE];
-
-    unsigned char indirect[BSIZE];
-    
-    uint *a;
-
-    uint index = 0;
-    uint offset = 0;
+    struct dirent *d;
 
     memset(&ip, 0, sizeof ip);
     memset(&pip, 0, sizeof pip);
-    
-        
-    iget(parent, &pip, f);
+    memset(&doff, 0, sizeof doff);
+    memset(buffer, 0 ,sizeof buffer);
 
-    for(index = 0; index < NDIRECT && pip.addrs[index] != 0; index++){
-       memset(buffer, 0, sizeof buffer);
-       rsec(pip.addrs[index], buffer, f);
-       d = (struct dirent *)(buffer);
-       offset = 0;       
-       while(offset < BSIZE) {
-           if(strcmp(name, d->name) == 0){
-               iget(d->inum, &ip, f);
-               
-               if(ip.nlink > 0) {
-                   fuse_reply_err(req, 0);
-                   return;
-               }
-
-                printf("Unlink: removing inode %d\n\tnlinks: %d\n", ip.inum, ip.nlink);
-                
-                d->inum = 0;
-                memset(d->name, 0, DIRSIZ);
-                wsec(pip.addrs[index], buffer, f);
-                pip.size -= sizeof(struct dirent);
-                iupdate(&pip, f);
-                iremove(&ip, f);
-                
-                fuse_reply_err(req, 0);
-                return;
-            }
-            offset += sizeof(struct dirent);
-            d = (struct dirent *)(buffer + offset);
-       }
+    if(iget(parent, &pip, f)){
+        printf("unlink: Error getting parent inode\n");
+        fuse_reply_err(req, ENOENT);
+        return;
     }
-    
-    if(!pip.addrs[NDIRECT]) {
+
+    if(nparent(parent, name, &ip, f, &doff)){
+        printf("unlink: Error getting %s inode through parent directory %ld\n", name, parent);
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
+
+    if(ip.nlink > 1){
+        printf("unlink: %s still has %d links\n", name, ip.nlink);
         fuse_reply_err(req, 0);
         return;
     }
-        
-    
-    memset(indirect, 0, sizeof indirect);
 
-    rsec(pip.addrs[NDIRECT], indirect, f);
+    rsec(doff.sector, buffer, f);
+    d = (struct dirent *)(buffer + doff.offset % BSIZE);
 
-    a = (uint *)(indirect);
-
-    for(index = 0; index < BSIZE && a[index] != 0;index++){
-        memset(buffer, 0, sizeof buffer);
-        rsec(a[index], buffer, f);
-        d = (struct dirent *)(buffer);
-
-        for(offset = 0; offset < BSIZE; offset += sizeof(struct dirent)){
-            if(strcmp(name, d->name) == 0){
-               
-               iget(d->inum, &ip, f);
-               
-               if(ip.nlink > 0){
-                   fuse_reply_err(req, 0);
-                   return;
-               }
-
-               printf("Unlink: removing inode %d\n\tnlinks: %d\n", ip.inum, ip.nlink);
-                    
-               memset(d->name, 0, DIRSIZ);
-               d->inum = 0;
-               wsec(a[index], buffer, f);
-               iremove(&ip, f);
-               pip.size -= sizeof(struct dirent);
-               iupdate(&pip, f);
-               fuse_reply_err(req, 0);
-               return;
-            }
-        }
+    if(d->inum != ip.inum){
+        printf("unlink: inum %d from directory does not match nparent inum %d\n", d->inum, ip.inum);
+        fuse_reply_err(req, 0);
+        return;
     }
 
+    memset(d, 0, sizeof(struct dirent));
+    wsec(doff.sector, buffer, f);
 
+    pip.nlink -= 1;
+    pip.size -= sizeof(struct dirent);
+    iupdate(&pip, f);
 
-    printf("unlink: Could not find the file %s within parent %ld \n", name, parent);
-
-    fuse_reply_err(req, ENOENT);
+    fuse_reply_err(req, 0);
 }
+
+
 
 static const struct fuse_lowlevel_ops opers = {
     .getattr    = xv6_getattr,
@@ -550,6 +498,7 @@ int main(int argc, char **argv) {
 
     memset(&opts, 0, sizeof opts);
     memset(&config, 0, sizeof config);
+    
 
     f = fopen("fs.img", "rb+");        
 

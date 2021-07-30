@@ -39,6 +39,11 @@ struct dirent {
   char name[DIRSIZ];
 };
 
+struct dirent_offset {
+  uint sector;
+  uint offset;
+};
+
 typedef unsigned int uint;
 
 struct superblock {
@@ -110,6 +115,12 @@ int iupdate(struct inode *ip, FILE *f);
 int ialloc(struct inode *ip, short type, FILE *f);
 int ilink(uint parent, const char *name, struct inode *ip, FILE *f);
 int iremove(struct inode *ip, FILE *f);
+
+int nparent(uint parent, const char *name, struct inode *ip, FILE *f, struct dirent_offset * doff);
+int iparent(uint parent, uint query, char *name, struct inode *ip, FILE *f, struct dirent_offset * doff);
+
+
+
 
 uint blkalloc(FILE *f);
 

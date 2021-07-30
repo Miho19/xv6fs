@@ -220,8 +220,7 @@ int ialloc(struct inode *ip, short type, FILE *f){
         printf("ialloc: Invalid inode pointer\n");
         return 1;
     }
-        
-    
+
     if(type != T_DIR && type != T_FILE){
         printf("ialloc: File type not recognised: %d\n", type);
         return 1;
@@ -233,7 +232,6 @@ int ialloc(struct inode *ip, short type, FILE *f){
         diptr = (struct dinode *)buffer + (inum % IPB);
 
         if(diptr->type == 0) {
-            
             diptr->type = type;
             diptr->nlink = 1;
             diptr->size = 0;
@@ -265,7 +263,7 @@ static void blkfree(uint bn, FILE *f) {
     mask = 1 << (bit_index % 8);
 
     if((buffer[bit_index / 8] & mask) == 0){
-        printf("Freeing free block\n");
+        printf("blkfree: Freeing free block\n");
         return;
     }
 
@@ -285,23 +283,28 @@ int iremove(struct inode *ip, FILE *f){
 
     memset(buffer, 0, sizeof buffer);
 
-    if(!ip)
+    if(!ip) {
+        printf("iremove: Invalid inode pointer\n");
         return 1;
-    if(ip->inum == 1)
+    }
+
+    if(ip->inum == 1) {
+        printf("iremove: Can not remove root directory\n");
         return 1;
+    }
 
     rsec(IBLOCK(ip->inum), buffer, f);
 
-    diptr = (struct dinode *)(buffer + (ip->inum % IPB));
+    diptr = (struct dinode *)buffer + (ip->inum % IPB);
 
-    if(diptr->type != ip->type)
+    if(diptr->type != ip->type) {
+        printf("iremove: type mismatch\nexpected\t: %d\nfound on disk:\t: %d", ip->type, diptr->type);
         return 1;
-    printf("1\n");
+    }
+    
     for(i=0;i<NDIRECT && diptr->addrs[i] != 0;i++){
         blkfree(diptr->addrs[i], f);
     }
-
-    printf("2\n");
 
     if(diptr->addrs[NDIRECT] != 0){
         memset(indirect, 0, sizeof indirect);
@@ -314,12 +317,10 @@ int iremove(struct inode *ip, FILE *f){
         blkfree(diptr->addrs[NDIRECT], f);
     }
 
-    printf("3\n");
-    
     memset(diptr, 0, sizeof *diptr);
     wsec(IBLOCK(ip->inum), buffer, f);
 
-    printf("4\n");
+    
     return 0;
 }
 
@@ -367,6 +368,7 @@ int ilink(uint parent, const char *name, struct inode *ip, FILE *f){
                 strncpy(d->name, name, DIRSIZ);
                 wsec(pip.addrs[index], buffer, f);
                 pip.size += sizeof(struct dirent);
+                pip.nlink += 1;
                 iupdate(&pip, f);
                 return 0;
             }
@@ -395,6 +397,7 @@ int ilink(uint parent, const char *name, struct inode *ip, FILE *f){
         strncpy(d->name, name, DIRSIZ);
         wsec(pip.addrs[index], buffer, f);
         pip.size += sizeof(struct dirent);
+        pip.nlink += 1;
         iupdate(&pip, f);
         return 0;
     }
@@ -415,6 +418,7 @@ int ilink(uint parent, const char *name, struct inode *ip, FILE *f){
                     strncpy(d->name, name, DIRSIZ);
                     wsec(a[indirect_block], buffer, f);
                     pip.size += sizeof(struct dirent);
+                    pip.nlink += 1;
                     iupdate(&pip, f);
                     return 0;
                 }
@@ -456,10 +460,210 @@ int ilink(uint parent, const char *name, struct inode *ip, FILE *f){
         strncpy(d->name, name, DIRSIZ);
         wsec(a[0], buffer, f);
         pip.size += sizeof(struct dirent);
+        pip.nlink += 1;
         iupdate(&pip, f);
         return 0;
     }
     printf("ilink: Couldn't add %s to parent %d likely no space left\n", name, pip.inum);
+    return 1;
+}
+
+
+int nparent(uint parent, const char *name, struct inode *ip, FILE *f, struct dirent_offset * doff){
+
+    struct inode pip;
+
+    uint index = 0;
+    uint offset = 0;
+
+    unsigned char buffer[BSIZE];
+    unsigned char indirect[BSIZE];
+    uint *a;
+    struct dirent *d;
+
+    memset(&pip, 0, sizeof pip);
+
+    if(!name){
+        printf("nparent: Name pointer is not valid\n");
+        return 1;
+    }
+
+    if(!ip){
+        printf("nparent: inode pointer is not valid\n");
+        return 1;
+    }
+
+    if(iget(parent, &pip, f)){
+        printf("nparent: Could not retrieved parent %d inode\n", parent);
+        return 1;
+    }
+
+    for(index = 0; index < NDIRECT; index++){
+        if(pip.addrs[index] == 0)
+            continue;
+        
+        memset(buffer, 0, sizeof buffer);
+        rsec(pip.addrs[index], buffer, f);
+
+        for(offset = 0; offset < BSIZE; offset += sizeof(struct dirent)){
+            d = (struct dirent *)(buffer + offset % BSIZE);
+
+            if(d->inum == 0)
+                continue;
+            
+            if(strncmp(name, d->name, DIRSIZ) == 0){
+                iget(d->inum, ip, f);
+                if(doff){
+                    doff->offset = offset;
+                    doff->sector = pip.addrs[index];
+                }
+                return 0;
+            }
+
+        }
+
+    }
+
+
+    if(pip.addrs[NDIRECT] == 0){
+        printf("nparent: Could not locate %s within parent %d\n", name, parent);
+    }
+
+    rsec(pip.addrs[NDIRECT], indirect, f);
+
+    a = (uint *)indirect;
+
+    for(index = 0; index < BSIZE; index++){
+        if(a[index] == 0)
+            continue;
+
+        memset(buffer, 0, sizeof buffer);
+        rsec(a[index], buffer, f);
+
+        for(offset = 0;offset < BSIZE; offset += sizeof(struct dirent)){
+            d = (struct dirent *)(buffer + offset % BSIZE);
+            if(d->inum == 0)
+                continue;
+            if(strncmp(d->name, name, DIRSIZ) == 0){
+                iget(d->inum, ip, f);
+                if(doff) {
+                    doff->offset = offset;
+                    doff->sector = a[index];
+                }
+                return 0;
+            }
+            
+        }
+    }
+
+    printf("nparent: Could not locate %s within parent %d\n", name, parent);
+
+    return 1;
+
+}
+
+int iparent(uint parent, uint query, char *name, struct inode *ip, FILE *f, struct dirent_offset * doff){
+    
+    struct inode pip;
+    uint offset = 0;
+    uint index = 0;
+
+    struct dirent *d;
+
+    uint *a;
+    unsigned char buffer[BSIZE];
+    unsigned char indirect[BSIZE];
+
+    memset(&pip, 0, sizeof pip);
+
+
+    if(!ip){
+        printf("iparent: Invalid memory location for ip\n");
+        return 1;
+    }
+
+    if(!parent) {
+        printf("iparent: Parent inode number must be valid\n");
+        return 1;
+    }
+
+    if(!query){
+        printf("iparent: Query inode number must be valid\n");
+        return 1;
+    }
+
+    if(!name) {
+        printf("iparent: Name pointer must be valid pointer with %d bytes long\n", DIRSIZ);
+        return 1;
+    }
+
+    memset(ip, 0, sizeof *ip);
+    memset(name, 0, DIRSIZ);
+    
+
+    if(iget(parent, &pip, f)){
+        printf("iparent: Parent %d could not be retrieved\n", parent);
+        return 1;    
+    }
+
+    if(pip.type != T_DIR) {
+        printf("iparent: Parent %d is not a directory\n", parent);
+        return 1;
+    }
+
+    for(index = 0; index < NDIRECT && pip.addrs[index] != 0; index++){
+        if(pip.addrs[index] == 0)
+            continue;
+
+        memset(buffer, 0, sizeof buffer);
+        rsec(pip.addrs[index], buffer, f);
+        
+        for(offset = 0; offset < BSIZE; offset += sizeof(struct dirent)){
+            d = (struct dirent *)(buffer + offset % BSIZE);
+            
+            if(query == d->inum){
+                iget(d->inum, ip, f);
+                strncpy(name, d->name, DIRSIZ);
+                if(doff) {
+                    doff->offset = offset;
+                    doff->sector = pip.addrs[index];
+                }
+                return 0;
+            }
+        }
+    }
+
+    if(pip.addrs[NDIRECT] == 0) {
+        printf("iparent: %d is not within parent %d\n", query, parent);
+        return 1;
+    }
+
+    memset(indirect, 0, sizeof indirect);
+
+    rsec(pip.addrs[NDIRECT], indirect, f);
+
+    a = (uint *)indirect;
+
+    for(index = 0; index < BSIZE; index++){
+        if(a[index] == 0)
+            continue;
+
+        memset(buffer, 0, sizeof buffer);
+        rsec(a[index], buffer, f);
+        for(offset = 0; offset < BSIZE; offset += sizeof(struct dirent)){
+            d = (struct dirent *)(buffer + offset % BSIZE);
+            if(d->inum == query){
+                iget(d->inum, ip, f);
+                strncpy(name, d->name, DIRSIZ);
+                if(doff) {
+                    doff->offset = offset;
+                    doff->sector = a[index];
+                }
+                return 0;
+            }
+        }
+    }
+    printf("iparent: Could not locate %d within parent %d\n", query, parent);
     return 1;
 }
 
