@@ -23,10 +23,11 @@ vim mnt/README
 - [ ] Output log messages to a text file.
 - [ ] Unit tests.
 - [ ] Implement FLUSH / fsync function. 
-- [ ] Documentation.
+- [x] Documentation.
  
 ## Issues:
 * The code in `xv6_readdir`smells bad because this is repeated code in `nparent` and `iparent`.
 
 ## Change list:
-* Added more functions to to better find an inode given a parent. Now can use name or inode number.
+* Added functions which should remove a lot of the repeated code issue I was having.
+* Removed global variables which will allow me to better make unit tests.

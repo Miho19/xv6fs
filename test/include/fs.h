@@ -32,10 +32,6 @@
 // Directory is a file containing a sequence of dirent structures.
 #define DIRSIZ 14
 
-#define MIN(x, y) ( (x) < (y) ? (x) : (y))
-
-#define DEBUG 1
-
 typedef unsigned short ushort;
 
 struct dirent {
@@ -69,6 +65,35 @@ struct dinode {
 };
 
 
+
+
+
+
+
+/**
+    Interface to reading and writing
+        currently set to fs.img.
+*/
+int rsec(int, void *, FILE *);
+int wsec(int, void *, FILE *);
+
+
+/** Test methods used by init code */
+void superblock_init(FILE *f);
+
+
+
+
+
+
+
+/** 
+
+    FILE.h
+
+*/
+
+
 // in-memory copy of an inode
 struct inode {
   uint dev;           // Device number
@@ -85,20 +110,11 @@ struct inode {
 };
 
 
-int rsec(int, void *, FILE *);
-int wsec(int, void *, FILE *);
-
-
-void superblock_read(FILE *f);
-
 int iget(uint inum, struct inode *ip, FILE *f);
 int iupdate(struct inode *ip, FILE *f);
 int ialloc(struct inode *ip, short type, FILE *f);
 int ilink(uint parent, const char *name, struct inode *ip, FILE *f);
 int iremove(struct inode *ip, FILE *f);
-
-int iread(struct inode *ip, unsigned char *buf, uint n, uint offset, FILE *f);
-int iwrite(struct inode *ip, const unsigned char *buf, uint n, uint offset, FILE *f);
 
 int nparent(uint parent, const char *name, struct inode *ip, FILE *f, struct dirent_offset * doff);
 int iparent(uint parent, uint query, char *name, struct inode *ip, FILE *f, struct dirent_offset * doff);

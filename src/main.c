@@ -81,13 +81,13 @@ static void dirbuf_add(fuse_req_t req, struct dirbuf *b, const char *name, fuse_
 
 }
 
-#define min(x, y) ( (x) < (y) ? (x) : (y))
+
 static int reply_buf_limited(fuse_req_t req, const char *buf, size_t bufsize, off_t offset, size_t maxsize){
 
     
     
     if(offset < (long)(bufsize)) {
-        return fuse_reply_buf(req, buf + offset, min(bufsize - offset, maxsize));
+        return fuse_reply_buf(req, buf + offset, MIN(bufsize - offset, maxsize));
     } 
 
     return fuse_reply_buf(req, 0, 0);
@@ -189,8 +189,6 @@ static void xv6_lookup(fuse_req_t req, fuse_ino_t parent, const char *name) {
 static void xv6_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi){
     
     struct stat stbuf;
-    
-    printf("\n\t%ld: Opening file\n", ino);
 
     memset(&stbuf, 0, sizeof stbuf);
 
@@ -199,7 +197,6 @@ static void xv6_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi){
     fi->fh = 0;
 
     if(fi->flags & O_APPEND){
-        printf("\n\tAPPEND MODE: %ld\n", stbuf.st_size);
         fi->fh = stbuf.st_size;
     }
 
@@ -237,7 +234,7 @@ static void xv6_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, str
         memset(buffer, 0, sizeof buffer);
         bn = bmapr(&ip, offset/BSIZE, f);
         rsec(bn, buffer, f);
-        m = min(size - total, BSIZE - offset % BSIZE);
+        m = MIN(size - total, BSIZE - offset % BSIZE);
         b.size += m;
         b.p = realloc(b.p, b.size);
         memmove(b.p + total, buffer + (offset % BSIZE), m);
@@ -273,7 +270,7 @@ static void xv6_write(fuse_req_t req, fuse_ino_t ino, const char *buf, size_t si
     for(total = 0, offset = off; total < size; total += m, offset += m) {
         bn = bmapw(&ip, offset/BSIZE, f);
         rsec(bn, buffer, f);
-        m = min(size - total, BSIZE - (offset % BSIZE));
+        m = MIN(size - total, BSIZE - (offset % BSIZE));
         memmove(buffer + (offset % BSIZE), buf + total, m);
         wsec(bn, buffer, f);
     }
@@ -449,7 +446,13 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    superblock_init(f);
+    superblock_read(f);
+    printf("Press any key to continue...\n");
+    
+    while(1) {
+        if(getc(stdin))
+            break;
+    }
     
 
     if(fuse_parse_cmdline(&args, &opts) != 0)
