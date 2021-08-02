@@ -10,8 +10,6 @@
  * readsb.
  * Read the superblock into sb pointer.
 */
-
-
 void readsb(struct superblock *sb, FILE *f){
     unsigned char buffer[BSIZE];
     struct superblock *s;
@@ -578,7 +576,7 @@ int iparent(uint parent, uint query, char *name, struct inode *ip, FILE *f, stru
 
     if(parent < 1 || parent > sb.ninodes || query < 1 || query > sb.ninodes) {
         if(DEBUG)
-            printf("iupdate: inum # out of range: parent (%d) query (%d) expected (1 - %d)\n", parent, query, sb.ninodes);
+            printf("iparent: inum # out of range: parent (%d) query (%d) expected (1 - %d)\n", parent, query, sb.ninodes);
         return 1;
     }
 

@@ -16,7 +16,7 @@ EXE = fstest
 .PHONY: all test clean
 
 all: $(EXE)
-	./fstest 
+	./$(EXE) -f
 
 $(EXE): $(OBJS)
 	$(CC) $(CLFAGS) $^ -o $@ $(LDFLAGS)

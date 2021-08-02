@@ -21,13 +21,13 @@ vim mnt/README
 - [x] Mount fs.img.
 - [ ] Mount USB mass storage device.
 - [ ] Output log messages to a text file.
-- [ ] Unit tests.
+- [x] Unit tests.
 - [ ] Implement FLUSH / fsync function. 
 - [x] Documentation.
  
 ## Issues:
-* The code in `xv6_readdir`smells bad because this is repeated code in `nparent` and `iparent`.
 
 ## Change list:
+* More unit tests added. Tests for libfuse will likely require scripting.
 * Added functions which should remove a lot of the repeated code issue I was having.
 * Removed global variables which will allow me to better make unit tests.
