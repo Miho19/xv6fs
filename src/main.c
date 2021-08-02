@@ -98,65 +98,40 @@ static void xv6_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, 
     struct dirbuf b;
 
     struct inode ip;
-    struct dirent *d;
-    uint index = 0;
+    struct dirent de;
+    
     uint offset = 0;
-    unsigned char buffer[BSIZE];
-    unsigned char indirect[BSIZE];
-    uint *a;
+    
     
     (void) fi;
 
     memset(&b, 0, sizeof b);
     memset(&ip, 0, sizeof ip);
-    memset(buffer, 0, sizeof buffer);
+    
 
     if(iget(ino, &ip, f)){
         fuse_reply_buf(req, 0, 0);
         return;
     }
 
-    for(index = 0;index < NDIRECT;index++){
-        if(ip.addrs[index] == 0)
+    if(ip.type != T_DIR){
+        fuse_reply_buf(req, 0, 0);
+        return;
+    }
+
+    for(offset = 0; offset < ip.size; offset += sizeof(struct dirent)){
+        memset(&de, 0, sizeof de);
+        iread(&ip, (unsigned char *)&de, sizeof de, offset, f);
+        if(de.inum == 0)
             continue;
-        memset(buffer, 0, sizeof buffer);
-        rsec(ip.addrs[index], buffer, f);
-
-        for(offset = 0;offset < BSIZE; offset += sizeof(struct dirent)){
-            d = (struct dirent *)(buffer + offset % BSIZE);
-            if(d->inum == 0)
-                continue;
-            dirbuf_add(req, &b, d->name, d->inum);
-        }
-    }
-
-    if(ip.addrs[NDIRECT]) {
-        memset(indirect, 0, sizeof indirect);
-        rsec(ip.addrs[NDIRECT], indirect, f);
-        a = (uint *)indirect;
-        for(index = 0; index < BSIZE; index++){
-            if(a[index] == 0)
-                continue;
-            rsec(a[index], buffer, f);
-            for(offset = 0; offset < BSIZE; offset += sizeof(struct dirent)){
-                d = (struct dirent *)(buffer + offset % BSIZE);
-                if(d->inum == 0)
-                    continue;
-                dirbuf_add(req, &b, d->name, d->inum);
-            }
-        }
-    }
+        dirbuf_add(req, &b, de.name, de.inum);
+    }    
 
     reply_buf_limited(req, b.p, b.size, off, size);
     free(b.p);
     
 }
 
-/** 
- *  Wants stat attributes in e.attrs;
- * 
- * 
-*/
 
 static void xv6_lookup(fuse_req_t req, fuse_ino_t parent, const char *name) {
     

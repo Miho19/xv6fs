@@ -536,8 +536,10 @@ int nparent(uint parent, const char *name, struct inode *ip, FILE *f, struct dir
             continue;
         if(strncmp(de.name, name, DIRSIZ) == 0){
             iget(de.inum, ip, f);
-            doff->offset = offset;
-            doff->sector = bmapr(&pip, offset/BSIZE, f);
+            if(doff){
+                doff->offset = offset;
+                doff->sector = bmapr(&pip, offset/BSIZE, f);
+            }
             return 0;
         }
     }
@@ -607,8 +609,10 @@ int iparent(uint parent, uint query, char *name, struct inode *ip, FILE *f, stru
             iget(de.inum, ip, f);
             memset(name, 0, DIRSIZ);
             strncpy(name, de.name, DIRSIZ);
-            doff->offset = offset;
-            doff->sector = bmapr(&pip, offset/BSIZE, f);
+            if(doff){
+                doff->offset = offset;
+                doff->sector = bmapr(&pip, offset/BSIZE, f);
+            }
             return 0;
         }
     }
