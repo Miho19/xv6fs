@@ -34,7 +34,7 @@
 
 #define MIN(x, y) ( (x) < (y) ? (x) : (y))
 
-#define DEBUG 1
+#define DEBUG 0
 
 typedef unsigned short ushort;
 
@@ -90,6 +90,7 @@ int wsec(int, void *, FILE *);
 
 
 void superblock_read(FILE *f);
+void readsb(struct superblock *sb, FILE *f);
 
 int iget(uint inum, struct inode *ip, FILE *f);
 int iupdate(struct inode *ip, FILE *f);
