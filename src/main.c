@@ -261,22 +261,97 @@ static void xv6_write(fuse_req_t req, fuse_ino_t ino, const char *buf, size_t si
     
 }
 
+
+static void xv6_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name) {
+    struct inode pip;
+    struct inode ip;
+    struct dirent_offset doff;
+    
+    memset(&ip, 0, sizeof ip);
+    memset(&pip, 0, sizeof pip);
+    memset(&doff, 0, sizeof doff);
+
+    if(nparent(parent, name, &ip, f, &doff)){
+        printf("rmdir: Could not get (%s) within parent(%ld)\n", name, parent);
+        fuse_reply_err(req, ENONET);
+        return;
+    }
+
+    if(iget(parent, &pip, f)){
+        printf("rmdir: Could not get parent (%ld) inode\n", parent);
+        fuse_reply_err(req, ENONET);
+        return;
+    }
+
+    if(ip.nlink > 1){
+        printf("rmdir: (%s) still has %d links\n", name, ip.nlink);
+        fuse_reply_err(req, EACCES);
+        return;
+    }
+
+
+    if(iunlink(&pip, &ip, &doff, f)){
+        printf("rmdir: Could not remove inode(%s)(%d) from parent(%ld)\n", name, ip.inum, parent);
+        fuse_reply_err(req, ENONET);
+        return;
+    }
+
+    fuse_reply_err(req, 0);
+}
+
+
+static void xv6_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode) {
+    struct fuse_entry_param e;
+    struct inode ip;
+
+
+    (void) mode;
+
+    memset(&ip, 0, sizeof ip);
+
+
+    if(ialloc(&ip, T_DIR, f)){
+        printf("ialloc: Error making directory(%s)\n", name);
+        fuse_reply_err(req, EACCES);
+        return;
+    }
+    
+    if(ilink(parent, name, &ip, f)){
+        printf("iparent: Error adding (%s) to parent (%ld)\n", name, parent);
+        iremove(&ip, f);
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
+
+    if(dirinit(parent, &ip, f)){
+        printf("dirinit: Error initializing new directory (%s)\n", name);
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
+
+
+    memset(&e, 0, sizeof e);
+    e.ino           = ip.inum;
+    e.attr_timeout  = 100.0;
+    e.entry_timeout = 100.0;
+    xv6_stat(ip.inum, &e.attr);
+    fuse_reply_entry(req, &e);
+
+}
+
 static void xv6_create(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode, struct fuse_file_info *fi){
     
     struct fuse_entry_param e;
     struct inode ip;
-    short type = T_FILE;
 
     memset(&ip, 0, sizeof ip);
     
-    if((mode & S_IFMT) == S_IFDIR) {
-        type = T_DIR;
-    }
+    if((mode & S_IFMT) != S_IFREG) {
+        fuse_reply_err(req, EACCES);
+        return;
+    }    
 
-    printf("Creating\t%s\nParent\t%ld\ntype\t%s\n\n", name, parent, type == T_FILE ? "File" : "Directory");
-    
-
-    if(ialloc(&ip, type, f)){
+    if(ialloc(&ip, T_FILE, f)){
         printf("ialloc: Error creating file %s\n", name);
         fuse_reply_err(req, ENOENT);
         return;
@@ -323,9 +398,7 @@ static void xv6_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup){
     }
 
     if(ip.type == T_DIR){
-        printf("forget: Removing directory currently not implemented\n");
-        fuse_reply_none(req);
-        return;
+        dirremove(&ip, f);
     }
 
     if(iremove(&ip, f)){
@@ -343,13 +416,10 @@ static void xv6_unlink(fuse_req_t req, fuse_ino_t parent, const char *name){
     struct inode pip;
     struct dirent_offset doff;
 
-    unsigned char buffer[BSIZE];
-    struct dirent *d;
-
     memset(&ip, 0, sizeof ip);
     memset(&pip, 0, sizeof pip);
     memset(&doff, 0, sizeof doff);
-    memset(buffer, 0 ,sizeof buffer);
+   
 
     if(iget(parent, &pip, f)){
         printf("unlink: Error getting parent inode\n");
@@ -369,21 +439,11 @@ static void xv6_unlink(fuse_req_t req, fuse_ino_t parent, const char *name){
         return;
     }
 
-    rsec(doff.sector, buffer, f);
-    d = (struct dirent *)(buffer + doff.offset % BSIZE);
-
-    if(d->inum != ip.inum){
-        printf("unlink: inum %d from directory does not match nparent inum %d\n", d->inum, ip.inum);
-        fuse_reply_err(req, 0);
+    if(iunlink(&pip, &ip, &doff, f)){
+        printf("unlink: Error removing (%s) from parent (%ld)\n", name, parent);
+        fuse_reply_err(req, EACCES);
         return;
     }
-
-    memset(d, 0, sizeof(struct dirent));
-    wsec(doff.sector, buffer, f);
-
-    pip.nlink -= 1;
-    pip.size -= sizeof(struct dirent);
-    iupdate(&pip, f);
 
     fuse_reply_err(req, 0);
 }
@@ -400,6 +460,8 @@ static const struct fuse_lowlevel_ops opers = {
     .create     = xv6_create,
     .forget     = xv6_forget,
     .unlink     = xv6_unlink,
+    .mkdir      = xv6_mkdir,
+    .rmdir      = xv6_rmdir,
 };
 
 int main(int argc, char **argv) {

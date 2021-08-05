@@ -37,4 +37,5 @@ stop: $(EXE) | $(MOUNT_POINT)
 	fusermount -u $(MOUNT_POINT)
 
 clean:
-	$(RM) -r $(OBJ) $(MOUNT_POINT) $(EXE)
+	$(RM) -r $(OBJ) $(MOUNT_POINT) $(EXE) fs.img
+	cp image/fs_copy.img fs.img

@@ -4,7 +4,7 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/usr/include/fuse/"
+                "/usr/include/fuse3/"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",

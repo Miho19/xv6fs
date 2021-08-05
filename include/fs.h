@@ -34,7 +34,7 @@
 
 #define MIN(x, y) ( (x) < (y) ? (x) : (y))
 
-#define DEBUG 0
+#define DEBUG 1
 
 typedef unsigned short ushort;
 
@@ -103,6 +103,10 @@ int iwrite(struct inode *ip, const unsigned char *buf, uint n, uint offset, FILE
 
 int nparent(uint parent, const char *name, struct inode *ip, FILE *f, struct dirent_offset * doff);
 int iparent(uint parent, uint query, char *name, struct inode *ip, FILE *f, struct dirent_offset * doff);
+
+int dirinit(uint parent, struct inode *dir, FILE *f);
+int iunlink(struct inode *pip, struct inode *ip, struct dirent_offset * doff, FILE *f);
+int dirremove(struct inode *pip, FILE *f);
 
 uint bmapw(struct inode *ip, uint bn, FILE *f);
 uint bmapr(struct inode *ip, uint bn, FILE *f);

@@ -187,7 +187,7 @@ int iget(uint inum, struct inode *ip, FILE *f){
         printf("size\t: %d\n", diptr->size);
         printf("type\t: %s\n", diptr->type == T_DIR ? "Directory" : "File");
         printf("nlink\t: %d\n", diptr->nlink);
-        printf("Block Addresses:\n[");
+        printf("Block Addresses:\n\t[");
         for(i=0;i<NDIRECT;i++){
             if(diptr->addrs[i]){
                 printf(" %d ", diptr->addrs[i]);
@@ -639,6 +639,10 @@ uint bmapw(struct inode *ip, uint bn, FILE *f) {
         if(ip->addrs[bn] == 0){
             printf("bmapw: Allocating new block for %d\n", ip->inum);
             ip->addrs[bn] = blkalloc(f);
+            
+            if(ip->type == T_DIR)
+                ip->size += BSIZE;
+            
             iupdate(ip, f);
         }
 
@@ -663,6 +667,10 @@ uint bmapw(struct inode *ip, uint bn, FILE *f) {
     if(a[bn] == 0) {
         printf("bmapw: Allocating indirect block pointer for %d\n", ip->inum);
         a[bn] = blkalloc(f);
+        
+        if(ip->type == T_DIR)
+            ip->size += BSIZE;
+        
         wsec(ip->addrs[NDIRECT], buffer, f);
     }
 
@@ -797,11 +805,190 @@ int iwrite(struct inode *ip, const unsigned char *buf, uint n, uint offset, FILE
         wsec(bn, buffer, f);
     }
 
-    if(off > ip->size && total > 0){
+    if(off > ip->size && total > 0 && ip->type == T_FILE){
         ip->size = off;
         iupdate(ip, f);
     }
 
     return total;
 
+}
+
+int iunlink(struct inode *pip, struct inode *ip, struct dirent_offset * doff, FILE *f){
+
+    
+    struct dirent de;
+
+    if(!pip){
+        if(DEBUG)
+            printf("iunlink: Pip must be a valid pointer to Parent Inode\n");
+        return 1;
+    }
+
+    if(!ip){
+        if(DEBUG)
+            printf("iunlink: ip must be a valid pointer\n");
+        return 1;
+    }
+
+    if(!doff){
+        if(DEBUG)
+            printf("iunlink: doff must be a pointer returned from either iparent or nparent\n");
+        return 1;
+    }
+
+    memset(&de, 0, sizeof de);
+
+    if(iread(pip, (unsigned char *)&de, sizeof de, doff->offset, f) != sizeof(struct dirent)){
+        if(DEBUG)
+            printf("iunlink: iread: Bytes read did not match size of dirent\n");
+        return 1;
+    }
+
+    if(de.inum != ip->inum){
+        if(DEBUG)
+            printf("iunlink: dirent (%s)(%d) at offset (%d) does not match inode (%d) supplied\n", de.name, de.inum, doff->offset, ip->inum);
+        return 1;
+    }
+
+    if(de.inum == 1 || strncmp(de.name, ".", DIRSIZ) == 0 || strncmp(de.name, "..", DIRSIZ) == 0){
+        if(DEBUG)
+            printf("iunlink: Can not remove . / .. or root directory\n");
+        return 1;
+    }
+
+    memset(&de, 0, sizeof de);
+
+    if(iwrite(pip, (unsigned char *)&de, sizeof de, doff->offset, f) != sizeof(struct dirent)){
+        if(DEBUG)
+            printf("iunlink: iwrite: Bytes written did not match sizeof dirent\n");
+        return 1;
+    }
+    
+    pip->nlink -= 1;
+    iupdate(pip, f);
+
+    return 0;
+
+}
+
+/** 
+ * dirremove.
+ * Recursively delete all objects within the directory
+ * regardless of their links.
+*/
+static int dirempty(struct inode *pip, FILE *f) {
+
+    uint offset = 0;
+    struct dirent de;
+
+    for(offset = (sizeof(struct dirent) * 2); offset < pip->size; offset += sizeof(struct dirent)){
+        memset(&de, 0, sizeof de);
+        iread(pip, (unsigned char *)&de, sizeof de, offset, f);
+        
+        if(de.inum != 0)
+            return 0;
+    }
+
+    return 1;
+
+}
+
+
+static void _dir_remove(struct inode *ip, FILE *f){
+    
+    uint offset = 0;
+    struct dirent de;
+    struct inode rip;
+
+
+    if(ip->type == T_FILE){
+        iremove(ip, f);
+        return;
+    }
+
+    if(dirempty(ip, f)){
+        iremove(ip, f);
+        return;
+    }
+
+    for(offset = (sizeof(struct dirent) * 2); offset < ip->size; offset += sizeof(struct dirent)){
+        memset(&de, 0, sizeof de);
+        if(iread(ip, (unsigned char *)&de, sizeof de, offset, f) != sizeof(struct dirent)){
+            printf("iread: error\n");
+            return;
+        }
+        
+        if(de.inum == 0)
+            continue;
+
+        memset(&rip, 0, sizeof rip);
+        iget(de.inum, &rip, f),
+        _dir_remove(&rip, f);
+    }
+}
+
+int dirremove(struct inode *pip, FILE *f){
+    
+    if(!pip)
+        return 1;
+    
+    if(pip->inum == 1){
+        return 1;
+    }
+
+    if(dirempty(pip, f)){
+        return 0;
+    }
+
+    _dir_remove(pip, f);
+    return 0;
+}
+
+int dirinit(uint parent, struct inode *dir, FILE *f){
+
+    struct superblock sb;
+    struct dirent e;
+    uint offset;
+
+    memset(&sb, 0, sizeof sb);
+    readsb(&sb, f);
+
+    if(!dir){
+        if(DEBUG)
+            printf("dirinit: Dir must be a valid inode pointer\n");
+        return 1;
+    }
+
+    if(parent > sb.ninodes || parent < 1){
+        if(DEBUG)
+            printf("ilink: Parent inum # out of range: (%d) expected (1 - %d)\n", parent, sb.ninodes);
+        return 1;
+    }
+
+    memset(&e, 0, sizeof e);
+
+    e.inum = dir->inum;
+    strncpy(e.name, ".", DIRSIZ);
+    offset = 0;
+
+    if(iwrite(dir, (unsigned char *)&e, sizeof e, offset, f) != sizeof(struct dirent)){
+        if(DEBUG)
+            printf("dirinit: iwrite: Write error of .\n");
+        return 1;
+    }
+
+    memset(&e, 0, sizeof e);
+    e.inum = parent;
+    strncpy(e.name, "..", DIRSIZ);
+
+    offset += sizeof(struct dirent);
+
+    if(iwrite(dir, (unsigned char *)&e, sizeof e, offset, f) != sizeof(struct dirent)){
+        if(DEBUG)
+            printf("dirinit: iwrite: Write error of .\n");
+        return 1;
+    }
+
+    return 0;
 }
