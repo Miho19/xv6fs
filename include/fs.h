@@ -85,33 +85,41 @@ struct inode {
 };
 
 
-int rsec(int, void *, FILE *);
-int wsec(int, void *, FILE *);
+typedef struct io_ops {
+  int(*rsec)(int, void *);
+  int(*wsec)(int, void *);
+  FILE *f;
+} IO;
+
+extern struct io_ops io;
+
+int rsec(int, void *);
+int wsec(int, void *);
 
 
-void superblock_read(FILE *f);
-void readsb(struct superblock *sb, FILE *f);
+void superblock_read();
+void readsb(struct superblock *sb);
 
-int iget(uint inum, struct inode *ip, FILE *f);
-int iupdate(struct inode *ip, FILE *f);
-int ialloc(struct inode *ip, short type, FILE *f);
-int ilink(uint parent, const char *name, struct inode *ip, FILE *f);
-int iremove(struct inode *ip, FILE *f);
+int iget(uint inum, struct inode *ip);
+int iupdate(struct inode *ip);
+int ialloc(struct inode *ip, short type);
+int ilink(uint parent, const char *name, struct inode *ip);
+int iremove(struct inode *ip);
 
-int iread(struct inode *ip, unsigned char *buf, uint n, uint offset, FILE *f);
-int iwrite(struct inode *ip, const unsigned char *buf, uint n, uint offset, FILE *f);
+int iread(struct inode *ip, unsigned char *buf, uint n, uint offset);
+int iwrite(struct inode *ip, const unsigned char *buf, uint n, uint offset);
 
-int nparent(uint parent, const char *name, struct inode *ip, FILE *f, struct dirent_offset * doff);
-int iparent(uint parent, uint query, char *name, struct inode *ip, FILE *f, struct dirent_offset * doff);
+int nparent(uint parent, const char *name, struct inode *ip, struct dirent_offset * doff);
+int iparent(uint parent, uint query, char *name, struct inode *ip, struct dirent_offset * doff);
 
-int dirinit(uint parent, struct inode *dir, FILE *f);
-int iunlink(struct inode *pip, struct inode *ip, struct dirent_offset * doff, FILE *f);
-int dirremove(struct inode *pip, FILE *f);
+int dirinit(uint parent, struct inode *dir);
+int iunlink(struct inode *pip, struct inode *ip, struct dirent_offset * doff);
+int dirremove(struct inode *pip);
 
-uint bmapw(struct inode *ip, uint bn, FILE *f);
-uint bmapr(struct inode *ip, uint bn, FILE *f);
+uint bmapw(struct inode *ip, uint bn);
+uint bmapr(struct inode *ip, uint bn);
 
 
-uint blkalloc(FILE *f);
+uint blkalloc();
 
 #endif

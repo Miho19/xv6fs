@@ -10,12 +10,12 @@
  * readsb.
  * Read the superblock into sb pointer.
 */
-void readsb(struct superblock *sb, FILE *f){
+void readsb(struct superblock *sb){
     unsigned char buffer[BSIZE];
     struct superblock *s;
 
     memset(buffer, 0, sizeof buffer);
-    rsec(1, buffer, f);
+    rsec(1, buffer);
 
     s = (struct superblock *)buffer;
 
@@ -28,10 +28,10 @@ void readsb(struct superblock *sb, FILE *f){
  * superblock_read.
  * Print out superblock data of the xv6 File System.
 */
-void superblock_read(FILE *f){
+void superblock_read(){
     struct superblock sb;
     memset(&sb, 0, sizeof(struct superblock));
-    readsb(&sb, f);
+    readsb(&sb);
     printf("Superblock\n\tsize\t%d\n\tnblocks\t%d\n\tninodes\t%d\n\tnlog\t%d\n\n", sb.size, sb.nblocks, sb.ninodes, sb.nlog);
 }
 /** 
@@ -40,17 +40,18 @@ void superblock_read(FILE *f){
  * Returns  0 on Failure.
  *          Number of bytes read on success.
 */
-int rsec(int sec, void *buf, FILE *f) {
-    int result = 0;
+int rsec(int sec, void *buf) {
+
 
     if(sec < 0 || sec > 1024)
-        return result;
+        return 0;
     
-    fseek(f, sec * BSIZE, 0);
+    if(io.f){
+        fseek(io.f, sec * BSIZE, 0);
+        return fread(buf, sizeof(char), BSIZE, io.f);
+    }
 
-    result = fread(buf, sizeof(char), BSIZE, f);
-
-    return result;
+    return io.rsec(sec, buf);
 }
 /** 
  * wsec.
@@ -58,17 +59,17 @@ int rsec(int sec, void *buf, FILE *f) {
  * Returns  0 on Failure.
  *          Number of bytes written on success.
 */
-int wsec(int sec, void *buf, FILE *f) {
-    int result = 0;
-
-    if (sec < 0 || sec > 1024)
-        return result;
+int wsec(int sec, void *buf) {
     
-    fseek(f, sec * BSIZE, 0);
+    if (sec < 0 || sec > 1024)
+        return 0;
+    
+    if(io.f){
+        fseek(io.f, sec * BSIZE, 0);
+        return fwrite(buf, sizeof(char), BSIZE, io.f);
+    }
 
-    result = fwrite(buf, sizeof(char), BSIZE, f);
-
-    return result;
+    return io.wsec(sec, buf);
 }
 /** 
  * iupdate.
@@ -76,7 +77,7 @@ int wsec(int sec, void *buf, FILE *f) {
  * Returns  1 on Failure.
  *          0 on Success.
 */
-int iupdate(struct inode *ip, FILE *f){
+int iupdate(struct inode *ip){
     struct dinode *diptr;
     int sector = 0;
     int result = 0;
@@ -89,7 +90,7 @@ int iupdate(struct inode *ip, FILE *f){
     memset(&sb, 0, sizeof sb);
 
 
-    readsb(&sb, f);
+    readsb(&sb);
 
     if(DEBUG)
         printf("iupdate: changing inode %d\n", ip->inum);
@@ -107,7 +108,7 @@ int iupdate(struct inode *ip, FILE *f){
     }
    
     sector = IBLOCK(ip->inum);
-    result = rsec(sector, buffer, f);
+    result = rsec(sector, buffer);
 
     if(result != BSIZE){
         if(DEBUG)
@@ -125,7 +126,7 @@ int iupdate(struct inode *ip, FILE *f){
         diptr->addrs[i] = ip->addrs[i];
     }
 
-    result = wsec(sector, buffer, f);
+    result = wsec(sector, buffer);
 
     if(result != BSIZE){
         if(DEBUG)
@@ -143,7 +144,7 @@ int iupdate(struct inode *ip, FILE *f){
  * Returns  1 on Failure.
  *          0 on Success.
 */
-int iget(uint inum, struct inode *ip, FILE *f){
+int iget(uint inum, struct inode *ip){
     struct dinode *diptr;
     int sector = 0;
     int result = 0;
@@ -155,7 +156,7 @@ int iget(uint inum, struct inode *ip, FILE *f){
     memset(&sb, 0, sizeof sb);
     memset(buffer, 0, sizeof buffer);
 
-    readsb(&sb, f);
+    readsb(&sb);
 
     if(inum > sb.ninodes || inum < 1) {
         if(DEBUG)
@@ -171,7 +172,7 @@ int iget(uint inum, struct inode *ip, FILE *f){
         
 
     sector = IBLOCK(inum);
-    result = rsec(sector, buffer, f);
+    result = rsec(sector, buffer);
 
     if(result != BSIZE) {
         if(DEBUG)
@@ -213,10 +214,10 @@ int iget(uint inum, struct inode *ip, FILE *f){
     return 0;
 }
 
-static void blkzero(uint bn, FILE *f){
+static void blkzero(uint bn){
     unsigned char buffer[BSIZE];
     memset(buffer, 0, sizeof buffer);
-    wsec(bn, buffer, f);
+    wsec(bn, buffer);
 }
 
 /** 
@@ -225,7 +226,7 @@ static void blkzero(uint bn, FILE *f){
  * Returns 0 on failure
  * Returns a disk address block number of success.
 */
-uint blkalloc(FILE *f){
+uint blkalloc(){
     uint bn = 0;
     uint bit = 0;
     uint bit_index = 0;
@@ -236,19 +237,19 @@ uint blkalloc(FILE *f){
 
     memset(&sb, 0, sizeof sb);
 
-    readsb(&sb, f);
+    readsb(&sb);
 
     for(bit = 0; bit < sb.size; bit += BPB){
         bn = BBLOCK(bit, sb.ninodes);
         memset(buffer, 0, sizeof buffer);
-        rsec(bn, buffer, f);
+        rsec(bn, buffer);
 
         for(bit_index = 0; bit_index < BPB && bit_index + bit < sb.size;bit_index++){
             mask = 1 << (bit_index % 8);
             if((buffer[bit_index/8] & mask) == 0) {
                 buffer[bit_index/8] |= mask;
-                wsec(bn, buffer, f);
-                blkzero(bit_index + bit, f);
+                wsec(bn, buffer);
+                blkzero(bit_index + bit);
                 return bit_index + bit;
             }
         }
@@ -266,7 +267,7 @@ uint blkalloc(FILE *f){
  *          0 on success.
  * 
 */
-int ialloc(struct inode *ip, short type, FILE *f){
+int ialloc(struct inode *ip, short type){
     uint inum;
     struct dinode *diptr;
     uint i;
@@ -278,7 +279,7 @@ int ialloc(struct inode *ip, short type, FILE *f){
     memset(buffer, 0, sizeof buffer);
     memset(&sb, 0, sizeof sb);
 
-    readsb(&sb, f);
+    readsb(&sb);
 
     if(!ip) {
         if(DEBUG)
@@ -293,7 +294,7 @@ int ialloc(struct inode *ip, short type, FILE *f){
     }
 
     for(inum = 1; inum < sb.ninodes; inum++){
-        rsec(IBLOCK(inum), buffer, f);
+        rsec(IBLOCK(inum), buffer);
 
         diptr = (struct dinode *)buffer + (inum % IPB);
 
@@ -306,8 +307,8 @@ int ialloc(struct inode *ip, short type, FILE *f){
             
             for(i=0;i<NDIRECT + 1;i++)
                 diptr->addrs[i] = 0;
-            wsec(IBLOCK(inum), buffer, f);
-            return iget(inum, ip, f);
+            wsec(IBLOCK(inum), buffer);
+            return iget(inum, ip);
         }
     }
 
@@ -319,7 +320,7 @@ int ialloc(struct inode *ip, short type, FILE *f){
  * blkfree.
  * Frees a block by toggling its bitmap index.
 */
-static void blkfree(uint bn, FILE *f) {
+static void blkfree(uint bn) {
     unsigned char buffer[BSIZE];
     struct superblock sb;
     uint bit_index = 0;
@@ -328,11 +329,11 @@ static void blkfree(uint bn, FILE *f) {
     memset(buffer, 0, sizeof buffer);
     memset(&sb, 0, sizeof sb);
 
-    readsb(&sb, f);
+    readsb(&sb);
 
     bit_index = bn % BPB;
 
-    rsec(BBLOCK(bn, sb.ninodes), buffer, f);
+    rsec(BBLOCK(bn, sb.ninodes), buffer);
 
     mask = 1 << (bit_index % 8);
 
@@ -343,7 +344,7 @@ static void blkfree(uint bn, FILE *f) {
     }
 
     buffer[bit_index / 8] &= ~mask;
-    wsec(BBLOCK(bn, sb.ninodes), buffer, f);
+    wsec(BBLOCK(bn, sb.ninodes), buffer);
 }
 /** 
  * iremove.
@@ -352,7 +353,7 @@ static void blkfree(uint bn, FILE *f) {
  * Returns  1 on error.
  *          0 on success.
 */
-int iremove(struct inode *ip, FILE *f){
+int iremove(struct inode *ip){
     
     unsigned char buffer[BSIZE];
     struct dinode *diptr;
@@ -379,7 +380,7 @@ int iremove(struct inode *ip, FILE *f){
         return 1;
     }
 
-    rsec(IBLOCK(ip->inum), buffer, f);
+    rsec(IBLOCK(ip->inum), buffer);
 
     diptr = (struct dinode *)buffer + (ip->inum % IPB);
 
@@ -392,7 +393,7 @@ int iremove(struct inode *ip, FILE *f){
     for(i=0;i<NDIRECT;i++){
         if(diptr->addrs[i] == 0)
             continue;
-        blkfree(diptr->addrs[i], f);
+        blkfree(diptr->addrs[i]);
     }
 
     if(diptr->addrs[NDIRECT]){
@@ -402,13 +403,13 @@ int iremove(struct inode *ip, FILE *f){
             if(a[i] == 0)
                 continue;
             
-            blkfree(a[i], f);
+            blkfree(a[i]);
         }
-        blkfree(diptr->addrs[NDIRECT], f);
+        blkfree(diptr->addrs[NDIRECT]);
     }
 
     memset(diptr, 0, sizeof(struct dinode));
-    wsec(IBLOCK(ip->inum), buffer, f);
+    wsec(IBLOCK(ip->inum), buffer);
 
     
     return 0;
@@ -421,7 +422,7 @@ int iremove(struct inode *ip, FILE *f){
  * Returns  1 on error.
  *          0 on success.
 */
-int ilink(uint parent, const char *name, struct inode *ip, FILE *f){
+int ilink(uint parent, const char *name, struct inode *ip){
    
     struct inode pip;
     struct superblock sb;
@@ -435,7 +436,7 @@ int ilink(uint parent, const char *name, struct inode *ip, FILE *f){
     memset(&sb, 0, sizeof sb);
 
 
-    readsb(&sb, f);
+    readsb(&sb);
 
     
     if(parent < 1 || parent > sb.ninodes){
@@ -444,7 +445,7 @@ int ilink(uint parent, const char *name, struct inode *ip, FILE *f){
         return 1;
     }
     
-    if(iget(parent, &pip, f)){
+    if(iget(parent, &pip)){
         if(DEBUG)
             printf("iupdate: Could not retrieve parent(%d)\n", parent);
         return 1;
@@ -458,7 +459,7 @@ int ilink(uint parent, const char *name, struct inode *ip, FILE *f){
 
 
     for(offset = 0; offset < pip.size; offset += sizeof(struct dirent)){
-        result = iread(&pip, (unsigned char *)&de, sizeof(de), offset, f);
+        result = iread(&pip, (unsigned char *)&de, sizeof(de), offset);
         if(result != sizeof(struct dirent)){
             if(DEBUG)
                 printf("ilink: Reading inode returned (%d) expected (%ld)\n", result, sizeof(struct dirent));
@@ -481,10 +482,10 @@ int ilink(uint parent, const char *name, struct inode *ip, FILE *f){
     strncpy(de.name, name, DIRSIZ);
     de.inum = ip->inum;
 
-    iwrite(&pip, (unsigned char *)&de, sizeof(struct dirent), offset, f);
+    iwrite(&pip, (unsigned char *)&de, sizeof(struct dirent), offset);
 
     pip.nlink++;
-    iupdate(&pip, f);
+    iupdate(&pip);
 
     return 0;
 
@@ -499,7 +500,7 @@ int ilink(uint parent, const char *name, struct inode *ip, FILE *f){
  *  
 */  
 
-int nparent(uint parent, const char *name, struct inode *ip, FILE *f, struct dirent_offset * doff){
+int nparent(uint parent, const char *name, struct inode *ip, struct dirent_offset * doff){
 
     struct inode pip;
     struct dirent de;
@@ -521,7 +522,7 @@ int nparent(uint parent, const char *name, struct inode *ip, FILE *f, struct dir
         return 1;
     }
 
-    if(iget(parent, &pip, f)){
+    if(iget(parent, &pip)){
         if(DEBUG)
             printf("nparent: Could not retrieve parent(%d) inode\n", parent);
         return 1;
@@ -529,14 +530,14 @@ int nparent(uint parent, const char *name, struct inode *ip, FILE *f, struct dir
 
     for(offset = 0; offset < pip.size; offset += sizeof(struct dirent)){
         memset(&de, 0, sizeof de);
-        iread(&pip, (unsigned char *)&de, sizeof(struct dirent), offset, f);
+        iread(&pip, (unsigned char *)&de, sizeof(struct dirent), offset);
         if(de.inum == 0)
             continue;
         if(strncmp(de.name, name, DIRSIZ) == 0){
-            iget(de.inum, ip, f);
+            iget(de.inum, ip);
             if(doff){
                 doff->offset = offset;
-                doff->sector = bmapr(&pip, offset/BSIZE, f);
+                doff->sector = bmapr(&pip, offset/BSIZE);
             }
             return 0;
         }
@@ -554,7 +555,7 @@ int nparent(uint parent, const char *name, struct inode *ip, FILE *f, struct dir
  *          0 on success.
  * 
 */
-int iparent(uint parent, uint query, char *name, struct inode *ip, FILE *f, struct dirent_offset * doff){
+int iparent(uint parent, uint query, char *name, struct inode *ip, struct dirent_offset * doff){
     
     struct inode pip;
     struct dirent de;
@@ -566,7 +567,7 @@ int iparent(uint parent, uint query, char *name, struct inode *ip, FILE *f, stru
     memset(&pip, 0, sizeof pip);
     memset(&sb, 0, sizeof sb);
 
-    readsb(&sb, f);
+    readsb(&sb);
 
     if(!ip){
         if(DEBUG)
@@ -586,7 +587,7 @@ int iparent(uint parent, uint query, char *name, struct inode *ip, FILE *f, stru
         return 1;
     }
 
-    if(iget(parent, &pip, f)){
+    if(iget(parent, &pip)){
         if(DEBUG)
             printf("iparent: Parent (%d) could not be retrieved\n", parent);
         return 1;    
@@ -600,16 +601,16 @@ int iparent(uint parent, uint query, char *name, struct inode *ip, FILE *f, stru
 
     for(offset = 0; offset < pip.size; offset += sizeof(struct dirent)){
         memset(&de, 0, sizeof de);
-        iread(&pip, (unsigned char *)&de, sizeof de, offset, f);
+        iread(&pip, (unsigned char *)&de, sizeof de, offset);
         if(de.inum == 0)
             continue;
         if(de.inum == query){
-            iget(de.inum, ip, f);
+            iget(de.inum, ip);
             memset(name, 0, DIRSIZ);
             strncpy(name, de.name, DIRSIZ);
             if(doff){
                 doff->offset = offset;
-                doff->sector = bmapr(&pip, offset/BSIZE, f);
+                doff->sector = bmapr(&pip, offset/BSIZE);
             }
             return 0;
         }
@@ -627,7 +628,7 @@ int iparent(uint parent, uint query, char *name, struct inode *ip, FILE *f, stru
  *          Disk address block on success.
  */
 
-uint bmapw(struct inode *ip, uint bn, FILE *f) {
+uint bmapw(struct inode *ip, uint bn) {
 
     unsigned char buffer[BSIZE];
     uint *a;
@@ -637,13 +638,14 @@ uint bmapw(struct inode *ip, uint bn, FILE *f) {
     if(bn < NDIRECT){
 
         if(ip->addrs[bn] == 0){
-            printf("bmapw: Allocating new block for %d\n", ip->inum);
-            ip->addrs[bn] = blkalloc(f);
+            if(DEBUG)
+                printf("bmapw: Allocating new block for %d\n", ip->inum);
+            ip->addrs[bn] = blkalloc();
             
             if(ip->type == T_DIR)
                 ip->size += BSIZE;
             
-            iupdate(ip, f);
+            iupdate(ip);
         }
 
         return ip->addrs[bn];
@@ -656,22 +658,22 @@ uint bmapw(struct inode *ip, uint bn, FILE *f) {
     
     if(ip->addrs[NDIRECT] == 0) {
         printf("bmapw: Allocating indirect block for %d\n", ip->inum);
-        ip->addrs[NDIRECT] = blkalloc(f);
-        iupdate(ip, f);
+        ip->addrs[NDIRECT] = blkalloc();
+        iupdate(ip);
     }
 
-    rsec(ip->addrs[NDIRECT], buffer, f);
+    rsec(ip->addrs[NDIRECT], buffer);
 
     a = (uint *)(buffer);
     
     if(a[bn] == 0) {
         printf("bmapw: Allocating indirect block pointer for %d\n", ip->inum);
-        a[bn] = blkalloc(f);
+        a[bn] = blkalloc();
         
         if(ip->type == T_DIR)
             ip->size += BSIZE;
         
-        wsec(ip->addrs[NDIRECT], buffer, f);
+        wsec(ip->addrs[NDIRECT], buffer);
     }
 
     return a[bn];
@@ -684,7 +686,7 @@ uint bmapw(struct inode *ip, uint bn, FILE *f) {
  *          Disk address block on success.
 */
 
-uint bmapr(struct inode *ip, uint bn, FILE *f) {
+uint bmapr(struct inode *ip, uint bn) {
 
 
     unsigned char buffer[BSIZE];
@@ -701,7 +703,7 @@ uint bmapr(struct inode *ip, uint bn, FILE *f) {
     if(bn > NINDIRECT)
         return 0;
     
-    if(rsec(ip->addrs[NDIRECT], buffer, f) < 512)
+    if(rsec(ip->addrs[NDIRECT], buffer) < 512)
         return 0;
     
     a = (uint *)(buffer);
@@ -718,7 +720,7 @@ uint bmapr(struct inode *ip, uint bn, FILE *f) {
  * Returns  0 on failure.
  *          Number of bytes read on success.
 */
-int iread(struct inode *ip, unsigned char *buf, uint n, uint offset, FILE *f){
+int iread(struct inode *ip, unsigned char *buf, uint n, uint offset){
 
     uint total = 0;
     uint m = 0;
@@ -752,9 +754,9 @@ int iread(struct inode *ip, unsigned char *buf, uint n, uint offset, FILE *f){
     memset(buf, 0, n);
 
     for(total = 0, m = 0, off = offset; total < n; total += m, off += m){
-        bn = bmapr(ip, off/BSIZE, f);
+        bn = bmapr(ip, off/BSIZE);
         memset(buffer, 0, sizeof buffer);
-        rsec(bn, buffer, f);
+        rsec(bn, buffer);
         m = MIN(n - total, BSIZE - off%BSIZE);
         memmove(buf + total, buffer + off % BSIZE, m);
     }
@@ -769,7 +771,7 @@ int iread(struct inode *ip, unsigned char *buf, uint n, uint offset, FILE *f){
  *          Number of bytes written on success.
 */
 
-int iwrite(struct inode *ip, const unsigned char *buf, uint n, uint offset, FILE *f){
+int iwrite(struct inode *ip, const unsigned char *buf, uint n, uint offset){
 
     uint total = 0;
     uint m = 0;
@@ -797,24 +799,24 @@ int iwrite(struct inode *ip, const unsigned char *buf, uint n, uint offset, FILE
     }
 
     for(total = 0, off = offset, m = 0; total < n; total += m, off += m){
-        bn = bmapw(ip, off/BSIZE, f);
+        bn = bmapw(ip, off/BSIZE);
         memset(buffer, 0, sizeof buffer);
-        rsec(bn, buffer, f);
+        rsec(bn, buffer);
         m = MIN(n - total, BSIZE - off%BSIZE);
         memmove(buffer + off%BSIZE, buf + total, m);
-        wsec(bn, buffer, f);
+        wsec(bn, buffer);
     }
 
     if(off > ip->size && total > 0 && ip->type == T_FILE){
         ip->size = off;
-        iupdate(ip, f);
+        iupdate(ip);
     }
 
     return total;
 
 }
 
-int iunlink(struct inode *pip, struct inode *ip, struct dirent_offset * doff, FILE *f){
+int iunlink(struct inode *pip, struct inode *ip, struct dirent_offset * doff){
 
     
     struct dirent de;
@@ -839,7 +841,7 @@ int iunlink(struct inode *pip, struct inode *ip, struct dirent_offset * doff, FI
 
     memset(&de, 0, sizeof de);
 
-    if(iread(pip, (unsigned char *)&de, sizeof de, doff->offset, f) != sizeof(struct dirent)){
+    if(iread(pip, (unsigned char *)&de, sizeof de, doff->offset) != sizeof(struct dirent)){
         if(DEBUG)
             printf("iunlink: iread: Bytes read did not match size of dirent\n");
         return 1;
@@ -859,14 +861,14 @@ int iunlink(struct inode *pip, struct inode *ip, struct dirent_offset * doff, FI
 
     memset(&de, 0, sizeof de);
 
-    if(iwrite(pip, (unsigned char *)&de, sizeof de, doff->offset, f) != sizeof(struct dirent)){
+    if(iwrite(pip, (unsigned char *)&de, sizeof de, doff->offset) != sizeof(struct dirent)){
         if(DEBUG)
             printf("iunlink: iwrite: Bytes written did not match sizeof dirent\n");
         return 1;
     }
     
     pip->nlink -= 1;
-    iupdate(pip, f);
+    iupdate(pip);
 
     return 0;
 
@@ -877,14 +879,14 @@ int iunlink(struct inode *pip, struct inode *ip, struct dirent_offset * doff, FI
  * Recursively delete all objects within the directory
  * regardless of their links.
 */
-static int dirempty(struct inode *pip, FILE *f) {
+static int dirempty(struct inode *pip) {
 
     uint offset = 0;
     struct dirent de;
 
     for(offset = (sizeof(struct dirent) * 2); offset < pip->size; offset += sizeof(struct dirent)){
         memset(&de, 0, sizeof de);
-        iread(pip, (unsigned char *)&de, sizeof de, offset, f);
+        iread(pip, (unsigned char *)&de, sizeof de, offset);
         
         if(de.inum != 0)
             return 0;
@@ -895,7 +897,7 @@ static int dirempty(struct inode *pip, FILE *f) {
 }
 
 
-static void _dir_remove(struct inode *ip, FILE *f){
+static void _dir_remove(struct inode *ip){
     
     uint offset = 0;
     struct dirent de;
@@ -903,18 +905,18 @@ static void _dir_remove(struct inode *ip, FILE *f){
 
 
     if(ip->type == T_FILE){
-        iremove(ip, f);
+        iremove(ip);
         return;
     }
 
-    if(dirempty(ip, f)){
-        iremove(ip, f);
+    if(dirempty(ip)){
+        iremove(ip);
         return;
     }
 
     for(offset = (sizeof(struct dirent) * 2); offset < ip->size; offset += sizeof(struct dirent)){
         memset(&de, 0, sizeof de);
-        if(iread(ip, (unsigned char *)&de, sizeof de, offset, f) != sizeof(struct dirent)){
+        if(iread(ip, (unsigned char *)&de, sizeof de, offset) != sizeof(struct dirent)){
             printf("iread: error\n");
             return;
         }
@@ -923,12 +925,12 @@ static void _dir_remove(struct inode *ip, FILE *f){
             continue;
 
         memset(&rip, 0, sizeof rip);
-        iget(de.inum, &rip, f),
-        _dir_remove(&rip, f);
+        iget(de.inum, &rip),
+        _dir_remove(&rip);
     }
 }
 
-int dirremove(struct inode *pip, FILE *f){
+int dirremove(struct inode *pip){
     
     if(!pip)
         return 1;
@@ -937,22 +939,22 @@ int dirremove(struct inode *pip, FILE *f){
         return 1;
     }
 
-    if(dirempty(pip, f)){
+    if(dirempty(pip)){
         return 0;
     }
 
-    _dir_remove(pip, f);
+    _dir_remove(pip);
     return 0;
 }
 
-int dirinit(uint parent, struct inode *dir, FILE *f){
+int dirinit(uint parent, struct inode *dir){
 
     struct superblock sb;
     struct dirent e;
     uint offset;
 
     memset(&sb, 0, sizeof sb);
-    readsb(&sb, f);
+    readsb(&sb);
 
     if(!dir){
         if(DEBUG)
@@ -972,7 +974,7 @@ int dirinit(uint parent, struct inode *dir, FILE *f){
     strncpy(e.name, ".", DIRSIZ);
     offset = 0;
 
-    if(iwrite(dir, (unsigned char *)&e, sizeof e, offset, f) != sizeof(struct dirent)){
+    if(iwrite(dir, (unsigned char *)&e, sizeof e, offset) != sizeof(struct dirent)){
         if(DEBUG)
             printf("dirinit: iwrite: Write error of .\n");
         return 1;
@@ -984,7 +986,7 @@ int dirinit(uint parent, struct inode *dir, FILE *f){
 
     offset += sizeof(struct dirent);
 
-    if(iwrite(dir, (unsigned char *)&e, sizeof e, offset, f) != sizeof(struct dirent)){
+    if(iwrite(dir, (unsigned char *)&e, sizeof e, offset) != sizeof(struct dirent)){
         if(DEBUG)
             printf("dirinit: iwrite: Write error of .\n");
         return 1;

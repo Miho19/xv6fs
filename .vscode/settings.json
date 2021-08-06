@@ -2,7 +2,8 @@
     "files.associations": {
         "fuse_lowlevel.h": "c",
         "compare": "c",
-        "type_traits": "c"
+        "type_traits": "c",
+        "xv6fuse.h": "c"
     },
     "C_Cpp.errorSquiggles": "Disabled"
 }

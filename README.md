@@ -16,8 +16,8 @@ vim mnt/README
 - [x] Read and write files.
 - [x] Create files.
 - [x] Remove files.
-- [ ] Create directories.
-- [ ] Remove directories.
+- [x] Create directories.
+- [x] Remove directories.
 - [x] Mount fs.img.
 - [ ] Mount USB mass storage device.
 - [ ] Output log messages to a text file.
@@ -28,6 +28,8 @@ vim mnt/README
 ## Issues:
 
 ## Change list:
+* Removed the `FILE *f` pointer in place for global structure containing the read/write sector functions.
+* Moved FUSE interface code into a seperate file to allow the merging of libusb code.
 * More unit tests added. Tests for libfuse will likely require scripting.
 * Added functions which should remove a lot of the repeated code issue I was having.
 * Removed global variables which will allow me to better make unit tests.
