@@ -1,6 +1,6 @@
 CC = gcc
-CLFAGS = -Wall -W $(shell pkg-config fuse3 --cflags --libs) -Iinclude/ # -D_FILE_OFFSET_BITS=64
-LDFLAGS = $(shell pkg-config fuse3 --cflags --libs)
+CLFAGS = -Wall -W $(shell pkg-config libusb-1.0 fuse3 --cflags --libs) -Iinclude/ # -D_FILE_OFFSET_BITS=64
+LDFLAGS = $(shell pkg-config libusb-1.0 fuse3 --cflags --libs)
 
 
 # directories

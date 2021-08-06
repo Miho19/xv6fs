@@ -501,8 +501,6 @@ int xv6_fuse_run(int argc, char **argv){
         free(opts.mountpoint);
         fuse_opt_free_args(&args);
 
-    
-    printf("\nEXIT CODE: %d\n", result);
     return result ? 1 : 0;
 
 }

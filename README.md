@@ -22,12 +22,12 @@ vim mnt/README
 - [ ] Mount USB mass storage device.
 - [ ] Output log messages to a text file.
 - [x] Unit tests.
-- [ ] Implement FLUSH / fsync function. 
 - [x] Documentation.
  
 ## Issues:
 
 ## Change list:
+* Added in USB handler code, need to debug on Pi
 * Removed the `FILE *f` pointer in place for global structure containing the read/write sector functions.
 * Moved FUSE interface code into a seperate file to allow the merging of libusb code.
 * More unit tests added. Tests for libfuse will likely require scripting.
