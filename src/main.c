@@ -183,38 +183,29 @@ static void xv6_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, str
     
     struct inode ip;
     struct dirbuf b;
-
-    uint bn = 0;
-    uint m = 0;
-    uint total = 0;
-    uint offset = 0;
-
-    
-    unsigned char buffer[BSIZE];
+    int result = 0;
     
     (void) fi;
-    memset(buffer, 0, sizeof buffer);
+   
     memset(&ip, 0, sizeof ip);
     memset(&b, 0, sizeof b);
 
 
     if(iget(ino, &ip, f)) {
-        printf("Error obtaining inode: %ld in read\n", ino);
+        printf("read: iget: Error obtaining inode(%ld)\n", ino);
         fuse_reply_err(req, EACCES);
         return;
     }
 
-
-    for(total = 0, offset = off; total < size; total += m, offset += m) {
-        memset(buffer, 0, sizeof buffer);
-        bn = bmapr(&ip, offset/BSIZE, f);
-        rsec(bn, buffer, f);
-        m = MIN(size - total, BSIZE - offset % BSIZE);
-        b.size += m;
-        b.p = realloc(b.p, b.size);
-        memmove(b.p + total, buffer + (offset % BSIZE), m);
-    }
+    b.p = malloc(size);
     
+
+    result = iread(&ip, (unsigned char *)b.p, size, off, f);
+    b.size = result;
+
+    if(result != (int)size){
+        printf("read: Bytes read (%d) does not match size (%ld)\n", result , size);
+    }
     
     reply_buf_limited(req, b.p, b.size, off, size);
     free(b.p);
@@ -224,40 +215,27 @@ static void xv6_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, str
 
 static void xv6_write(fuse_req_t req, fuse_ino_t ino, const char *buf, size_t size, off_t off, struct fuse_file_info *fi) {
     
-    size_t offset = off;
-    size_t total = 0;
-    uint bn = 0;
-    uint m = 0;
+    
+    int result = 0;
 
     struct inode ip;
-
-    unsigned char buffer[BSIZE];
+    (void)fi;
 
     memset(&ip, 0, sizeof ip);
 
-    printf("\nWRITE\nino\t:%ld\nsize\t:%ld\noffset\t:%ld\nfi->fh:\t%ld\n\n", ino, size, off, fi->fh);
-
     if(iget(ino, &ip, f)){
+        printf("write: iget: Could not retrieve inode (%ld)\n", ino);
         fuse_reply_write(req, 0);
         return;
     }
 
-    for(total = 0, offset = off; total < size; total += m, offset += m) {
-        bn = bmapw(&ip, offset/BSIZE, f);
-        rsec(bn, buffer, f);
-        m = MIN(size - total, BSIZE - (offset % BSIZE));
-        memmove(buffer + (offset % BSIZE), buf + total, m);
-        wsec(bn, buffer, f);
+    result = iwrite(&ip, (unsigned char *)buf, size, off, f);
+
+    if(result != (int)size){
+        printf("write: Bytes written (%d) does not match size (%ld)\n", result, size);
     }
 
-    if(total > 0 && offset > ip.size) {
-        ip.size = offset;
-        iupdate(&ip, f);
-    }
-
-
-
-    fuse_reply_write(req, total);
+    fuse_reply_write(req, result);
     
 }
 
