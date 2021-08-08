@@ -19,7 +19,7 @@ vim mnt/README
 - [x] Create directories.
 - [x] Remove directories.
 - [x] Mount fs.img.
-- [ ] Mount USB mass storage device.
+- [x] Mount USB mass storage device.
 - [ ] Output log messages to a text file.
 - [x] Unit tests.
 - [x] Documentation.
@@ -27,7 +27,8 @@ vim mnt/README
 ## Issues:
 
 ## Change list:
-* Added in USB handler code, need to debug on Pi
+* USB is mountable. The transfers are slow due to no caching of reads and instant flushing of writes.
+* Added in USB handler code, need to debug on Pi 
 * Removed the `FILE *f` pointer in place for global structure containing the read/write sector functions.
 * Moved FUSE interface code into a seperate file to allow the merging of libusb code.
 * More unit tests added. Tests for libfuse will likely require scripting.

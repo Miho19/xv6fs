@@ -15,7 +15,6 @@ int read_sector(int sec, void *buf);
 
 int write_sector(int sec, void *buf);
 
-
 int usb_init();
 
 int usb_close();

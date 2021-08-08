@@ -34,7 +34,7 @@
 
 #define MIN(x, y) ( (x) < (y) ? (x) : (y))
 
-#define DEBUG 0
+#define DEBUG 1
 
 typedef unsigned short ushort;
 

@@ -33,7 +33,7 @@ $(OBJ) $(MOUNT_POINT):
 run: $(EXE) | $(MOUNT_POINT)
 	./$(EXE) $(options) $(MOUNT_POINT)
 
-stop: $(EXE) | $(MOUNT_POINT)
+stop: $(MOUNT_POINT)
 	fusermount -u $(MOUNT_POINT)
 
 clean:

@@ -7,7 +7,9 @@
 #define OUT (0x01)
 
 #define GET_MAX_LUN 0xFE
-#define TIMEOUT 3000
+#define TIMEOUT 4000
+
+#define DEBUG 0
 
 #define be_to_int32(buf) ( ( (buf)[0] << 24) |  ((buf)[1] << 16)  | ( (buf)[2] << 8) | (buf)[3])
 
@@ -336,17 +338,12 @@ int storage_init(libusb_device_handle *handle) {
 
 	printf("Last block: 0x%08X\nBlock Size: %d Bytes\nSize: %.2f GB\n",max_block, block_size, device_size);
 
-	 
 	if(storage_status(handle, IN, expected_tag) == -2) {
 		get_sense(handle, IN, OUT);
 	}
 	
 	return 0;
 }
-
-
-
-
 
 int read_sector(int sec, void *buf) {
 	int size = 0;
@@ -368,7 +365,8 @@ int read_sector(int sec, void *buf) {
 		get_sense(_dev_handle, IN, OUT);
 	}
 	
-	printf("Receieved %d bytes back from read sector\n", size);
+	if(DEBUG)
+		printf("Receieved %d bytes back from read sector\n", size);
 
 	return size;
 }
@@ -396,7 +394,8 @@ int write_sector(int sec, void *buf) {
 		get_sense(_dev_handle, IN, OUT);
 	}
 
-	printf("Written %d bytes to the device\n", size);
+	if(DEBUG)
+		printf("Written %d bytes to the device\n", size);
 
 	return size;
 		
