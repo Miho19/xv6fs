@@ -11,9 +11,9 @@
 #include <errno.h>
 
 
-int read_sector(int sec, void *buf);
+int read_sector(uint32_t sec, void *buf);
 
-int write_sector(int sec, void *buf);
+int write_sector(uint32_t sec, void *buf);
 
 int usb_init();
 

@@ -9,8 +9,8 @@ int main(int argc, char **argv) {
     FILE *f = 0;
     int result = 0;
 
-    memset(&io, 0, sizeof io);
-
+	memset(&io, 0, sizeof io);
+	
     result = usb_init();
 
     if(!result){
@@ -32,6 +32,8 @@ int main(int argc, char **argv) {
         printf("\n\nxv6fs: Using fs.img as disk\n");
     }
 
+	superblock_read();	
+	
     printf("EXIT CODE\nFUSE\t(%d)\n", xv6_fuse_run(argc, argv));
     !result ? printf("USB\t(%d)\n", usb_close()) : printf("\t");
 

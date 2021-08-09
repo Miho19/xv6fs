@@ -1,4 +1,7 @@
 #include "xv6usb.h"
+#include "endian.h"
+
+
 
 #define V_ID 0x058f
 #define P_ID 0x6387
@@ -345,7 +348,7 @@ int storage_init(libusb_device_handle *handle) {
 	return 0;
 }
 
-int read_sector(int sec, void *buf) {
+int read_sector(uint32_t sec, void *buf) {
 	int size = 0;
 	uint32_t expected_tag = 0;
 	uint8_t cdb[16];
@@ -354,8 +357,8 @@ int read_sector(int sec, void *buf) {
 	memset(cdb, 0, sizeof cdb);
 	
 	cdb[0] = 0x28; // Read(10)
-	cdb[5] = sec; // Address 
-	cdb[8] = 0x01;
+	cdb[5] = sec; // Address
+	cdb[8] = 0x1;
 
 	send_command(_dev_handle, OUT, MAX_LUN, cdb, LIBUSB_ENDPOINT_IN, 512, &expected_tag);
 	
@@ -372,7 +375,7 @@ int read_sector(int sec, void *buf) {
 }
 
 
-int write_sector(int sec, void *buf) {
+int write_sector(uint32_t sec, void *buf) {
 	int size = 0;
 	uint32_t expected_tag = 0;
 	uint8_t cdb[16];
