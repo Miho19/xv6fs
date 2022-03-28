@@ -1,206 +1,194 @@
-#include <criterion/criterion.h>
-#include <string.h>
-
+#include <stdlib.h>
+#include <stdio.h>
+#include <check.h>
+#include <check_stdint.h>
 #include "fs.h"
 
-FILE *f = 0;
-
+FILE *f;
 struct io_ops io;
 
-void startup(void){    
+START_TEST(open_f) {
+    ck_assert_ptr_ne(f, 0);
+} END_TEST
+
+
+START_TEST(read_sector_1) {
+    int result = 0;
+    unsigned char buffer[BSIZE];
+    memset(buffer, 0, sizeof(buffer));
+    result = rsec(1, buffer);
+    ck_assert_int_eq(result, BSIZE);
+
+} END_TEST
+
+START_TEST(read_sector_failure) {
+    int result = 0;
+    unsigned char buffer[BSIZE];
+    memset(buffer, 0, sizeof(buffer));
+    result = rsec(-1, buffer);
+    ck_assert_int_eq(result, 0);
+} END_TEST
+
+START_TEST(superblock_read_test) {
+    struct superblock *s;
     
-
-    f = fopen("fs.img", "rb+");
-
-    memset(&io, 0, sizeof io);
-
-    io.f = f;
-    io.rsec = 0;
-    io.wsec = 0;
-}
-
-void shutdown(void){
-    
-}
-
-TestSuite(fstests, .init = startup, .fini = shutdown);
-
-Test(fstests, test_1){
-    cr_expect(io.f != 0, "Could not open fs.img");   
-}
-
-
-Test(fstests, test_2){
     unsigned char buffer[BSIZE];
-    memset(buffer, 0, sizeof buffer);    
-    cr_expect(rsec(1, buffer) == BSIZE, "Bytes Recieved were not BSIZE");
-}
-
-Test(fstests, test_3) {
-    unsigned char buffer[BSIZE];
-    memset(buffer, 0, sizeof buffer);
-    cr_expect(rsec(-1, buffer) == 0, "rsec failure should return zero");
-}
-
-Test(fstests, test_4){
-    struct superblock *sb;
-    unsigned char buffer[BSIZE];
-    memset(buffer, 0, sizeof buffer);
-
+    memset(buffer, 0, sizeof(buffer));
 
     rsec(1, buffer);
-    sb = (struct superblock *)buffer;
-    cr_expect(sb->size == 1024, "Size of superblock incorrect");
-}
+    
+    s = (struct superblock *)buffer;
+    ck_assert_int_eq(s->size, 1024);
 
-Test(fstests, test_5){
+} END_TEST
+
+START_TEST(disk_root_inode_read) {
+    
+    unsigned char buffer[BSIZE];
     struct dinode *diptr;
     uint inum = 1;
-    unsigned char buffer[BSIZE];
-    memset(buffer, 0, sizeof buffer);
+    memset(buffer, 0, sizeof(buffer));
 
     rsec(IBLOCK(inum), buffer);
 
     diptr = (struct dinode *)buffer + (inum % IPB);
-    cr_expect(diptr->size == BSIZE && diptr->type == T_DIR && diptr->addrs[0] == 29, "Size/Type/disk address block of ROOT inode is incorrect");
-}
 
-Test(fstests, test_6){
+    ck_assert_int_eq(diptr->size, BSIZE);
+    ck_assert_int_eq(diptr->type, T_DIR);
+
+} END_TEST
+
+START_TEST(get_root_inode){
     struct inode ip;
+    int result = 0;
     memset(&ip, 0, sizeof ip);
-    cr_expect(iget(1, &ip) == 0, "Error getting root inode");   
-}
+    result = iget(1, &ip);
 
-Test(fstests, test_7){
-    struct inode ip;
-    memset(&ip, 0, sizeof ip);
-    cr_expect(iget(0, &ip) == 1, "Error getting root inode");   
-}
+    ck_assert_int_eq(result, 0);
+    ck_assert_int_eq(ip.inum, 1);    
 
-Test(fstests, test_8){
+} END_TEST
+
+START_TEST(get_inode_failure) {
     struct superblock sb;
     struct inode ip;
+    int result = 0;
 
     memset(&sb, 0, sizeof sb);
     memset(&ip, 0, sizeof ip);
     readsb(&sb);
 
-    cr_expect(iget(sb.ninodes + 1, &ip) == 1, "Error getting root inode");   
-}
+    result = iget(sb.ninodes + 1, &ip);
 
-Test(fstests, test_9){
+    ck_assert_int_eq(result, 1);
+
+
+} END_TEST
+
+START_TEST(get_second_inode){
     struct inode ip;
+    int result = 0;
     memset(&ip, 0, sizeof ip);
+    result = iget(2, &ip);
 
-    iget(1, &ip);
+    ck_assert_int_eq(result, 0);
+    ck_assert_int_eq(ip.inum, 2);   
+}END_TEST
 
-    cr_expect(ip.inum == 1, "Root inode inum error");   
-}
+/** 
+ * Create a file, link to parent with name `hello.txt`, 
+ * write `Hello World!` to file, retrieve that file from parent directory
+ * check its contents
+*/
 
-Test(fstests, test_10){
+START_TEST(add_new_file){
     struct inode ip;
-    memset(&ip, 0, sizeof ip);
-    
-
-    iget(2, &ip);
-    cr_expect(ip.inum != 1, "Inum should not have an inum of 1");   
-}
-
-Test(fstests, test_11){
-    struct inode ip;
-    memset(&ip, 0, sizeof ip);
-
-    iget(1, &ip);
-    cr_expect(ip.type == T_DIR, "Root inode should be a directory");   
-}
-
-Test(fstests, test_12){
-    struct inode ip;
-    memset(&ip, 0, sizeof ip);
-
-    ialloc(&ip, T_FILE);
-
-    cr_expect(ip.type == T_FILE && ip.nlink == 1 && ip.size == 0, "Should be able to add a new file");
-
-}
-
-Test(fstests, test_13){
-    struct inode ip;
+    struct inode testip;
+    int result = 0;
     char name[DIRSIZ];
+    char name_test[DIRSIZ];
+    unsigned char data[] = "Hello World!";
+    unsigned char buffer[BSIZE];
 
     memset(&ip, 0, sizeof ip);
     memset(name, 0, sizeof name);
     strncpy(name, "hello.txt", DIRSIZ);
+
+    result = ialloc(&ip, T_FILE);
+    ck_assert_int_eq(result, 0);
+
+    ck_assert_int_eq(ip.size, 0);
+    ck_assert_int_eq(ip.type, T_FILE);
+    ck_assert_int_eq(ip.nlink, 1);
+
+    result = ilink(1, name, &ip);
+    ck_assert_int_eq(result, 0);
+
+    result = iwrite(&ip, data, strlen((char *)data), 0);
+    ck_assert_int_eq(result, strlen((char *)data));
+
+    memset(&testip, 0, sizeof testip);
+    result = nparent(1, name, &testip, 0);
+    ck_assert_int_eq(result, 0);
+    ck_assert_int_eq(testip.inum, ip.inum);
+
+    memset(name_test, 0, sizeof name_test);
+    memset(&testip, 0, sizeof testip);
+    result = iparent(1, ip.inum, name_test, &testip, 0);
+    ck_assert_int_eq(result, 0);
+    ck_assert_int_eq(testip.inum, ip.inum);
+    ck_assert_int_eq(strncmp((char *)name, (char *)name_test, DIRSIZ), 0);
+
+    memset(buffer, 0, sizeof buffer);
+    result = iread(&ip, buffer, strlen((char *)data), 0);
+    ck_assert_int_eq(result, strlen((char *)data));
+    ck_assert_int_eq(strncmp((char *)data, (char *)buffer, DIRSIZ), 0);
+
+} END_TEST
+
+
+Suite* fs_suite(void) {
+    Suite *s;
+    TCase *tr_core;
+
+    s = suite_create("File System");
+
+    tr_core = tcase_create("Core");
+
+    tcase_add_test(tr_core, open_f);
+    tcase_add_test(tr_core, read_sector_1);
+    tcase_add_test(tr_core, read_sector_failure);
+    tcase_add_test(tr_core, superblock_read_test);
+    tcase_add_test(tr_core, disk_root_inode_read);
+    tcase_add_test(tr_core, get_root_inode);
+    tcase_add_test(tr_core, get_inode_failure);
+    tcase_add_test(tr_core, get_second_inode);
+    tcase_add_test(tr_core, add_new_file);
     
-    iget(16, &ip);
-
-   cr_expect(ilink(1, name, &ip) == 0, "Should be able to add direnty to root inode");
-
-}
-
-Test(fstests, test_14){
-    struct inode ip;
-    
-    unsigned char data[] = "Hello world!";
-
-    memset(&ip, 0, sizeof ip);
-
-    iget(16, &ip);
-
-    cr_expect(iwrite(&ip, data, strlen((char *)data) + 1, 0) == (int)(strlen((char *)data) + 1), "Write should return length of hello world!");
-}
-
-Test(fstests, test_15){
-    struct inode ip;
-    char name[DIRSIZ];
-
-
-    memset(&ip, 0, sizeof ip);
-
-    memset(name, 0, sizeof name);
-    strncpy(name, "hello.txt", DIRSIZ);
-   
-    nparent(1, name, &ip, 0);
-    
-
-    cr_expect( ip.inum == 16, "Should get the new file by name");
-}
-
-Test(fstests, test_16) {
-    char name[DIRSIZ];
-    struct inode ip;
-
-    memset(&ip, 0, sizeof ip);
-    memset(name, 0, sizeof name);
-    iparent(1, 16, name, &ip,0);
-
-    cr_expect(strncmp(name, "hello.txt", DIRSIZ) == 0, "Name mismatch from getting new inode");
-}
-
-Test(fstests, test_17) {
-    unsigned char data[BSIZE];
-    struct inode ip;
-
-    memset(&ip, 0, sizeof ip);
-    memset(data, 0, sizeof data);
-
-    iget(16, &ip);
-
-    iread(&ip, data, strlen("Hello world!") + 1, 0);
-
-    cr_expect(strncmp((char *)data, "Hello world!", DIRSIZ) == 0, "Mismatch of text");
-
+    suite_add_tcase(s, tr_core);
+    return s;
 }
 
 
+int main(void) {
+    int number_failed = 0;
+    Suite *s;
+    SRunner *sr;
 
 
+    f = fopen("fs.img", "rb+");
 
+    io.f = f;
+    io.rsec = 0;
+    io.wsec = 0;
 
+    s = fs_suite();
+    sr = srunner_create(s);
 
+    srunner_run_all(sr, CK_NORMAL);
+    number_failed = srunner_ntests_failed(sr);
 
+    srunner_free(sr);
 
-
-
-
-
+    return (number_failed == 0 ) ? EXIT_SUCCESS : EXIT_FAILURE;
+}

@@ -1,18 +1,24 @@
 # xv6FS
-***
-Project designed to maniuplate the [xv6 File system](http://pekopeko11.sakura.ne.jp/unix_v6/xv6-book/en/File_system.html) using a [FUSE interface](https://en.wikipedia.org/wiki/Filesystem_in_Userspace).
-***
-## Example Usage:
+
+Allows a user to manipulate the xv6 file system [xv6 File system](http://pekopeko11.sakura.ne.jp/unix_v6/xv6-book/en/File_system.html) on a linux based system
+using the [FUSE interface](https://en.wikipedia.org/wiki/Filesystem_in_Userspace).
+
+### Usage:
+
 ```
 cd xv6fs
-make
-mkdir mnt
-cp ~xv6/source/fs.img ./fs.img
-./xv6fs -d -s -f mnt
-vim mnt/README
+make run
 ```
 
-## Task List:
+### Requirements
+
+- [fuse3](https://packages.ubuntu.com/focal/fuse3)
+- [libusb-1-0](https://libusb.info/)
+- [check](https://libcheck.github.io/check/web/install.html)
+- USB flash drive formatted with the xv6 file system. _will default to using the fs.img if no USB device is present_
+
+### Supported Operations
+
 - [x] Read and write files.
 - [x] Create files.
 - [x] Remove files.
@@ -20,17 +26,5 @@ vim mnt/README
 - [x] Remove directories.
 - [x] Mount fs.img.
 - [x] Mount USB mass storage device.
-- [ ] Output log messages to a text file.
-- [x] Unit tests.
-- [x] Documentation.
- 
-## Issues:
 
-## Change list:
-* USB is mountable. The transfers are slow due to no caching of reads and instant flushing of writes.
-* Added in USB handler code, need to debug on Pi 
-* Removed the `FILE *f` pointer in place for global structure containing the read/write sector functions.
-* Moved FUSE interface code into a seperate file to allow the merging of libusb code.
-* More unit tests added. Tests for libfuse will likely require scripting.
-* Added functions which should remove a lot of the repeated code issue I was having.
-* Removed global variables which will allow me to better make unit tests.
+###
