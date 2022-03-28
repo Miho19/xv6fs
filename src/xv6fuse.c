@@ -9,7 +9,7 @@ static int xv6_stat(fuse_ino_t ino, struct stat *stbuf) {
     memset(&ip, 0, sizeof ip);
 
     if(iget(ino, &ip)) {
-        printf("stat: Could not get inode %ld\n", ino);
+        printf("stat: Could not get inode %lld\n", ino);
         return 1;
     }
 
@@ -130,7 +130,7 @@ static void xv6_lookup(fuse_req_t req, fuse_ino_t parent, const char *name) {
     memset(&ip, 0, sizeof ip);
     
     if(nparent(parent, name, &ip, 0)){
-        printf("lookup: Could not retrieve inode from parent %ld\n", parent);
+        printf("lookup: Could not retrieve inode from parent %lld\n", parent);
         fuse_reply_err(req, ENOENT);
         return;
     }
@@ -180,7 +180,7 @@ static void xv6_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, str
 
 
     if(iget(ino, &ip)) {
-        printf("read: iget: Error obtaining inode(%ld)\n", ino);
+        printf("read: iget: Error obtaining inode(%lld)\n", ino);
         fuse_reply_err(req, EACCES);
         return;
     }
@@ -192,7 +192,7 @@ static void xv6_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, str
     b.size = result;
 
     if(result != (int)size){
-        printf("read: Bytes read (%d) does not match size (%ld)\n", result , size);
+        printf("read: Bytes read (%d) does not match size (%d)\n", result , size);
     }
     
     reply_buf_limited(req, b.p, b.size, off, size);
@@ -211,7 +211,7 @@ static void xv6_write(fuse_req_t req, fuse_ino_t ino, const char *buf, size_t si
     memset(&ip, 0, sizeof ip);
 
     if(iget(ino, &ip)){
-        printf("write: iget: Could not retrieve inode (%ld)\n", ino);
+        printf("write: iget: Could not retrieve inode (%lld)\n", ino);
         fuse_reply_write(req, 0);
         return;
     }
@@ -219,7 +219,7 @@ static void xv6_write(fuse_req_t req, fuse_ino_t ino, const char *buf, size_t si
     result = iwrite(&ip, (unsigned char *)buf, size, off);
 
     if(result != (int)size){
-        printf("write: Bytes written (%d) does not match size (%ld)\n", result, size);
+        printf("write: Bytes written (%d) does not match size (%d)\n", result, size);
     }
 
     fuse_reply_write(req, result);
@@ -237,13 +237,13 @@ static void xv6_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name) {
     memset(&doff, 0, sizeof doff);
 
     if(nparent(parent, name, &ip, &doff)){
-        printf("rmdir: Could not get (%s) within parent(%ld)\n", name, parent);
+        printf("rmdir: Could not get (%s) within parent(%lld)\n", name, parent);
         fuse_reply_err(req, ENONET);
         return;
     }
 
     if(iget(parent, &pip)){
-        printf("rmdir: Could not get parent (%ld) inode\n", parent);
+        printf("rmdir: Could not get parent (%lld) inode\n", parent);
         fuse_reply_err(req, ENONET);
         return;
     }
@@ -256,7 +256,7 @@ static void xv6_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name) {
 
 
     if(iunlink(&pip, &ip, &doff)){
-        printf("rmdir: Could not remove inode(%s)(%d) from parent(%ld)\n", name, ip.inum, parent);
+        printf("rmdir: Could not remove inode(%s)(%d) from parent(%lld)\n", name, ip.inum, parent);
         fuse_reply_err(req, ENONET);
         return;
     }
@@ -282,7 +282,7 @@ static void xv6_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_
     }
     
     if(ilink(parent, name, &ip)){
-        printf("iparent: Error adding (%s) to parent (%ld)\n", name, parent);
+        printf("iparent: Error adding (%s) to parent (%lld)\n", name, parent);
         iremove(&ip);
         fuse_reply_err(req, ENOENT);
         return;
@@ -323,7 +323,7 @@ static void xv6_create(fuse_req_t req, fuse_ino_t parent, const char *name, mode
     }
 
     if(ilink(parent, name, &ip)) {
-        printf("ilink: Error adding file to parent %ld\n", parent);
+        printf("ilink: Error adding file to parent %lld\n", parent);
         iremove(&ip);
         fuse_reply_err(req, ENOENT);
         return;
@@ -349,7 +349,7 @@ static void xv6_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup){
     ip.nlink -= nlookup;
     iupdate(&ip);
    
-    printf("forget:\ninum\t:%ld\nnlink\t:%d\n", ino, ip.nlink);
+    printf("forget:\ninum\t:%lld\nnlink\t:%d\n", ino, ip.nlink);
 
     if(ip.nlink > 0){
         printf("forget: Link amount %d \n", ip.nlink);
@@ -393,7 +393,7 @@ static void xv6_unlink(fuse_req_t req, fuse_ino_t parent, const char *name){
     }
 
     if(nparent(parent, name, &ip, &doff)){
-        printf("unlink: Error getting %s inode through parent directory %ld\n", name, parent);
+        printf("unlink: Error getting %s inode through parent directory %lld\n", name, parent);
         fuse_reply_err(req, ENOENT);
         return;
     }
@@ -405,7 +405,7 @@ static void xv6_unlink(fuse_req_t req, fuse_ino_t parent, const char *name){
     }
 
     if(iunlink(&pip, &ip, &doff)){
-        printf("unlink: Error removing (%s) from parent (%ld)\n", name, parent);
+        printf("unlink: Error removing (%s) from parent (%lld)\n", name, parent);
         fuse_reply_err(req, EACCES);
         return;
     }

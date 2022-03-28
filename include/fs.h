@@ -2,6 +2,8 @@
 #define FS_H_
 
 #include <stdio.h>
+#include <stdint.h>
+
 
 #define BSIZE 512
 #define ROOT_INO 1
@@ -86,15 +88,15 @@ struct inode {
 
 
 typedef struct io_ops {
-  int(*rsec)(int, void *);
-  int(*wsec)(int, void *);
+  int(*rsec)(uint32_t, void *);
+  int(*wsec)(uint32_t, void *);
   FILE *f;
 } IO;
 
 extern struct io_ops io;
 
-int rsec(int, void *);
-int wsec(int, void *);
+int rsec(uint32_t, void *);
+int wsec(uint32_t, void *);
 
 
 void superblock_read();

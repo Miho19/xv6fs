@@ -353,11 +353,22 @@ int read_sector(uint32_t sec, void *buf) {
 	uint32_t expected_tag = 0;
 	uint8_t cdb[16];
 
+	union {
+		uint32_t sec;
+		unsigned char byte[4];
+	} sector;
+
 	memset(buf, 0, 512);
 	memset(cdb, 0, sizeof cdb);
+
+	sector.sec = sec;
+
 	
 	cdb[0] = 0x28; // Read(10)
-	cdb[5] = sec; // Address
+	cdb[2] = sector.byte[3]; // Address
+	cdb[3] = sector.byte[2]; // Address
+	cdb[4] = sector.byte[1]; // Address
+	cdb[5] = sector.byte[0]; // Address
 	cdb[8] = 0x1;
 
 	send_command(_dev_handle, OUT, MAX_LUN, cdb, LIBUSB_ENDPOINT_IN, 512, &expected_tag);
@@ -380,11 +391,21 @@ int write_sector(uint32_t sec, void *buf) {
 	uint32_t expected_tag = 0;
 	uint8_t cdb[16];
 
+	union {
+		uint32_t sec;
+		unsigned char byte[4];
+	} sector;
+
+	sector.sec = sec;
+
 	memset(cdb, 0, sizeof cdb);
 
 	cdb[0] = 0x2A; //Write(10)
 
-	cdb[5] = sec; // Address
+	cdb[2] = sector.byte[3]; // Address
+	cdb[3] = sector.byte[2]; // Address
+	cdb[4] = sector.byte[1]; // Address
+	cdb[5] = sector.byte[0]; // Address
 
 	cdb[8] = 0x01; // 1 sector write
 

@@ -40,10 +40,10 @@ void superblock_read(){
  * Returns  0 on Failure.
  *          Number of bytes read on success.
 */
-int rsec(int sec, void *buf) {
+int rsec(uint32_t sec, void *buf) {
 
 
-    if(sec < 0 || sec > 1024)
+    if(!sec || sec > 1024)
         return 0;
     
     if(io.f){
@@ -59,9 +59,9 @@ int rsec(int sec, void *buf) {
  * Returns  0 on Failure.
  *          Number of bytes written on success.
 */
-int wsec(int sec, void *buf) {
+int wsec(uint32_t sec, void *buf) {
     
-    if (sec < 0 || sec > 1024)
+    if (!sec || sec > 1024)
         return 0;
     
     if(io.f){
@@ -244,12 +244,13 @@ uint blkalloc(){
         memset(buffer, 0, sizeof buffer);
         rsec(bn, buffer);
 
-        for(bit_index = 0; bit_index < BPB && bit_index + bit < sb.size;bit_index++){
+        for(bit_index = 1; bit_index < BPB && bit_index + bit < sb.size;bit_index++){
             mask = 1 << (bit_index % 8);
             if((buffer[bit_index/8] & mask) == 0) {
                 buffer[bit_index/8] |= mask;
                 wsec(bn, buffer);
                 blkzero(bit_index + bit);
+                printf("FOUND BLOCK: %d || %d\n", bit_index, bit);
                 return bit_index + bit;
             }
         }
@@ -462,7 +463,7 @@ int ilink(uint parent, const char *name, struct inode *ip){
         result = iread(&pip, (unsigned char *)&de, sizeof(de), offset);
         if(result != sizeof(struct dirent)){
             if(DEBUG)
-                printf("ilink: Reading inode returned (%d) expected (%ld)\n", result, sizeof(struct dirent));
+                printf("ilink: Reading inode returned (%d) expected (%d)\n", result, sizeof(struct dirent));
             return 1;
         }
         

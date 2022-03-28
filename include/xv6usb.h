@@ -9,6 +9,7 @@
 #include <string.h>
 #include <stddef.h>
 #include <errno.h>
+#include <stdint.h>
 
 
 int read_sector(uint32_t sec, void *buf);
