@@ -1,11 +1,6 @@
 #include "xv6usb.h"
 #include "endian.h"
 
-
-
-#define V_ID 0x058f
-#define P_ID 0x6387
-
 #define IN ( 0x82) 
 #define OUT (0x01)
 

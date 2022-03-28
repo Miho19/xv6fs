@@ -11,6 +11,12 @@
 #include <errno.h>
 #include <stdint.h>
 
+/** 
+ * Replace these before running.
+ * 
+*/
+#define V_ID 0x058f // vendor ID
+#define P_ID 0x6387 // product ID
 
 int read_sector(uint32_t sec, void *buf);
 
